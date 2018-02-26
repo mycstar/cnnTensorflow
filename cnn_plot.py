@@ -4,10 +4,13 @@ from keras.datasets import mnist
 from keras.layers import Dense, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 from keras.models import Sequential
-from keras import backend as K
-from sklearn.metrics import classification_report, roc_auc_score, roc_curve
+from keras import metrics
+
+from sklearn.metrics import classification_report, roc_auc_score, roc_curve, make_scorer, confusion_matrix
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc
+from binaryEval import tp, tn, fp, fn, precision, mcor, precision, recall, f1, plot_confusion_matrix
+
 import numpy
 from numpy import argmax
 from scipy import interp
@@ -15,126 +18,29 @@ from scipy import interp
 import matplotlib.pyplot as plt
 
 # array length
-arrayLength = 88
-seed = 6
+arrayLength = 180
+seed = 123456
 numpy.random.seed(seed)
 
 # read file
-dataset = numpy.loadtxt("22.csv", delimiter=",")
+dataset = numpy.loadtxt("180.csv", delimiter=",")
 X = dataset[:, 0:arrayLength]
 Y = dataset[:, arrayLength]
-batch_size = 10
+batch_size = 3000
 num_classes = 2
-epochs = 10
-img_x, img_y = 1, 88
+epochs = 50
+img_x, img_y = 1, 180
 
 # define 10-fold cross validation test harness
 kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
 cvscores = []
-
-
-def precision(y_true, y_pred):
-
-    # Count positive samples.
-    c1 = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    c2 = K.sum(K.round(K.clip(y_pred, 0, 1)))
-    c3 = K.sum(K.round(K.clip(y_true, 0, 1)))
-
-    # If there are no true samples, fix the F1 score at 0.
-    if c3 == 0:
-        return 0
-
-    # How many selected items are relevant?
-    precision = c1 / c2
-
-    return precision
-
-def mcor(y_true, y_pred):
-    # matthews_correlation
-    y_pred_pos = K.round(K.clip(y_pred, 0, 1))
-    y_pred_neg = 1 - y_pred_pos
-
-    y_pos = K.round(K.clip(y_true, 0, 1))
-    y_neg = 1 - y_pos
-
-    tp = K.sum(y_pos * y_pred_pos)
-    tn = K.sum(y_neg * y_pred_neg)
-
-    fp = K.sum(y_neg * y_pred_pos)
-    fn = K.sum(y_pos * y_pred_neg)
-
-    numerator = (tp * tn - fp * fn)
-    denominator = K.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
-
-    return numerator / (denominator + K.epsilon())
-
-
-def precision(y_true, y_pred):
-    """Precision metric.
-
-    Only computes a batch-wise average of precision.
-
-    Computes the precision, a metric for multi-label classification of
-    how many selected items are relevant.
-    """
-    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
-    precision = true_positives / (predicted_positives + K.epsilon())
-    return precision
-
-
-def recall(y_true, y_pred):
-    """Recall metric.
-
-    Only computes a batch-wise average of recall.
-
-    Computes the recall, a metric for multi-label classification of
-    how many relevant items are selected.
-    """
-    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
-    recall = true_positives / (possible_positives + K.epsilon())
-    return recall
-
-
-def f1(y_true, y_pred):
-    def recall(y_true, y_pred):
-        """Recall metric.
-
-        Only computes a batch-wise average of recall.
-
-        Computes the recall, a metric for multi-label classification of
-        how many relevant items are selected.
-        """
-        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-        possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
-        recall = true_positives / (possible_positives + K.epsilon())
-        return recall
-
-    def precision(y_true, y_pred):
-        """Precision metric.
-
-        Only computes a batch-wise average of precision.
-
-        Computes the precision, a metric for multi-label classification of
-        how many selected items are relevant.
-        """
-        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-        predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
-        precision = true_positives / (predicted_positives + K.epsilon())
-        return precision
-
-    precision = precision(y_true, y_pred)
-    recall = recall(y_true, y_pred)
-    return 2 * ((precision * recall) / (precision + recall))
-
-
 tprs = []
 aucs = []
 mean_fpr = numpy.linspace(0, 1, 100)
 i = 0
 
-for train, test in kfold.split(X, Y):
+for fold, (train, test) in enumerate(kfold.split(X, Y)):
+    print('fold:%s' % fold)
     x_train = X[train].reshape(X[train].shape[0], img_x, img_y, 1)
     x_test = X[test].reshape(X[test].shape[0], img_x, img_y, 1)
     input_shape = (img_x, img_y, 1)
@@ -144,8 +50,9 @@ for train, test in kfold.split(X, Y):
     x_test /= 255
     y_train = keras.utils.to_categorical(Y[train], num_classes)
     y_test = keras.utils.to_categorical(Y[test], num_classes)
+
     model = Sequential()
-    model.add(Conv2D(32, kernel_size=(1, 1), strides=(1, 1),
+    model.add(Conv2D(32, kernel_size=(1, 9), strides=(1, 1),
                      activation='relu',
                      input_shape=input_shape))
     model.add(MaxPooling2D(pool_size=(1, 1), strides=(1, 1)))
@@ -157,7 +64,7 @@ for train, test in kfold.split(X, Y):
 
     model.compile(loss=keras.losses.categorical_crossentropy,
                   optimizer=keras.optimizers.Adam(),
-                  metrics=['accuracy', precision, mcor, recall, f1])
+                  metrics=['accuracy', precision, mcor, recall, f1, metrics.binary_accuracy, metrics.categorical_accuracy])
 
 
     class AccuracyHistory(keras.callbacks.Callback):
@@ -165,13 +72,14 @@ for train, test in kfold.split(X, Y):
 
         def on_epoch_end(self, batch, logs={}): self.acc.append(logs.get('acc'))
 
-
     history = AccuracyHistory()
+
+    scoring = {'tp': make_scorer(tp), 'tn': make_scorer(tn), 'fp': make_scorer(fp), 'fn': make_scorer(fn)}
 
     model.fit(x_train, y_train,
               batch_size=batch_size,
               epochs=epochs,
-              verbose=1,
+              verbose=2,
               validation_data=(x_test, y_test),
               callbacks=[history])
 
@@ -183,7 +91,18 @@ for train, test in kfold.split(X, Y):
 
     print(classification_report(y_test_argmax, predict_argmax, target_names=targetNames))
 
+    cnf_matrix = confusion_matrix(y_test_argmax, predict_argmax)
+
+    print(cnf_matrix)
+
+    # print(cnf_matrix.ravel())
+
+    # plt.figure()
+    # plot_confusion_matrix(cnf_matrix, classes=targetNames,
+    #                       title='Confusion matrix, without normalization')
+
     print('roc:%.2f%%' % roc_auc_score(y_test_argmax, predict_argmax))
+
     # Compute ROC curve and area the curve
     fpr, tpr, thresholds = roc_curve(Y[test], predict_score[:, 1])
     tprs.append(interp(mean_fpr, fpr, tpr))
@@ -222,5 +141,5 @@ plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
 plt.title('Receiver operating characteristic example')
 plt.legend(loc="lower right")
-#plt.show()
+plt.show()
 plt.savefig('plot.png')

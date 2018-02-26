@@ -127,8 +127,10 @@ def f1(y_true, y_pred):
     recall = recall(y_true, y_pred)
     return 2 * ((precision * recall) / (precision + recall))
 
+i=0
 
 for train, test in kfold.split(X, Y):
+    print('i=:%s' % i)
     x_train = X[train].reshape(X[train].shape[0], img_x, img_y, 1)
     x_test = X[test].reshape(X[test].shape[0], img_x, img_y, 1)
     input_shape = (img_x, img_y, 1)
@@ -169,7 +171,7 @@ for train, test in kfold.split(X, Y):
               validation_data=(x_test, y_test),
               callbacks=[history])
 
-    predict_score = model.predict(x_test, verbose=0)
+    predict_score = model.predict(x_test, verbose=1)
     targetNames = ['class 0', 'class 1']
     y_test_argmax = argmax(y_test, axis=1)
     predict_argmax = argmax(predict_score, axis=1)
@@ -177,38 +179,15 @@ for train, test in kfold.split(X, Y):
     print(classification_report(y_test_argmax, predict_argmax, target_names=targetNames))
 
     print('roc:%.2f%%' % roc_auc_score(y_test_argmax, predict_argmax))
-    #
-    # fpr, tpr, thresholds = roc_curve(y_test_argmax, predict_argmax, pos_label=2)
-    # print(fpr)
-    # print(tpr)
-    # print(thresholds)
 
-    # Compute ROC curve and ROC area for each class
-    fpr = dict()
-    tpr = dict()
-    roc_auc = dict()
-    for i in range(num_classes):
-        fpr[i], tpr[i], _ = roc_curve(y_test[:, i], predict_score[:, i])
-        roc_auc[i] = auc(fpr[i], tpr[i])
-
-    # Compute micro-average ROC curve and ROC area
-    fpr["micro"], tpr["micro"], _ = roc_curve(y_test.ravel(), predict_score.ravel())
-    roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
-
-    plt.figure()
-    lw = 2
-    plt.plot(fpr[2], tpr[2], color='orange', lw=lw, label='ROC curve (area = %0.2f)' % roc_auc[2])
-    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver operating characteristic example')
-    plt.legend(loc="lower right")
-    plt.show()
+    fpr, tpr, thresholds = roc_curve(y_test_argmax, predict_argmax, pos_label=2)
+    print(fpr)
+    print(tpr)
+    print(thresholds)
 
     scores = model.evaluate(x_test, y_test, verbose=0)
     print("%s: %.2f%%" % (model.metrics_names[1], scores[1] * 100))
     cvscores.append(scores[1] * 100)
+    i += 1
 
 print("%.2f%% (+/- %.2f%%)" % (numpy.mean(cvscores), numpy.std(cvscores)))
