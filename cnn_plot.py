@@ -15,21 +15,34 @@ import numpy
 from numpy import argmax
 from scipy import interp
 
+import matplotlib
+import os
+import matplotlib as mpl
+if os.environ.get('DISPLAY','') == '':
+    print('no display found. Using non-interactive Agg backend')
+    mpl.use('Agg')
 import matplotlib.pyplot as plt
 
+import tensorflow as tf
+
+
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config)
+
 # array length
-arrayLength = 180
+arrayLength = 259
 seed = 123456
 numpy.random.seed(seed)
 
 # read file
-dataset = numpy.loadtxt("180.csv", delimiter=",")
+dataset = numpy.loadtxt("259.csv", delimiter=",")
 X = dataset[:, 0:arrayLength]
 Y = dataset[:, arrayLength]
-batch_size = 3000
+batch_size = 500
 num_classes = 2
 epochs = 50
-img_x, img_y = 1, 180
+img_x, img_y = 1, 259
 
 # define 10-fold cross validation test harness
 kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
@@ -52,11 +65,11 @@ for fold, (train, test) in enumerate(kfold.split(X, Y)):
     y_test = keras.utils.to_categorical(Y[test], num_classes)
 
     model = Sequential()
-    model.add(Conv2D(32, kernel_size=(1, 9), strides=(1, 1),
+    model.add(Conv2D(100, kernel_size=(1, 1), strides=(1, 1),
                      activation='relu',
                      input_shape=input_shape))
     model.add(MaxPooling2D(pool_size=(1, 1), strides=(1, 1)))
-    model.add(Conv2D(64, (1, 1), activation='relu'))
+    model.add(Conv2D(200, (1, 1), activation='relu'))
     model.add(MaxPooling2D(pool_size=(1, 1)))
     model.add(Flatten())
     model.add(Dense(1000, activation='relu'))
