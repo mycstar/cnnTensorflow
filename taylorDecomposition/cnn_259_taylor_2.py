@@ -1,29 +1,15 @@
 from __future__ import print_function
-import sys
+import sys, os
 from random import randint
 
 import keras
 from keras import backend as K
 import tensorflow as tf
-from keras.layers import Dense, Flatten
-from keras.layers import Conv2D, MaxPooling2D
-from keras.losses import binary_crossentropy, mean_squared_error
-from keras.models import Sequential
-from keras import metrics
-from keras.layers import SimpleRNN
-from keras.layers.normalization import BatchNormalization
-from keras import initializers
-from keras import layers
+from keras.losses import binary_crossentropy
 
 from sklearn.metrics import classification_report, roc_auc_score, roc_curve, make_scorer, confusion_matrix
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc
-from sklearn.utils import class_weight
-from sklearn.model_selection import train_test_split
-from sklearn import preprocessing
-
-from imblearn.over_sampling import SMOTE
-from imblearn.combine import SMOTEENN
 
 import numpy
 from numpy import argmax
@@ -289,12 +275,7 @@ X = []
 Y = []
 allArray = []
 
-from decimal import *
-
 total_start_time = datetime.now()
-
-# out1 = csv.writer(open("train10.csv", "w"), delimiter=',')
-# out2 = csv.writer(open("test10.csv", "w"), delimiter=',')
 
 dataFile = "../data/259_2000.csv"
 print("data File:", dataFile)
@@ -314,9 +295,6 @@ for index, line in enumerate(open(dataFile, 'r').readlines()):
     X.append(features)
     Y.extend(label)
 
-# out = csv.writer(open("myfile.csv", "w"), delimiter=',', quoting=csv.QUOTE_ALL)
-# out.writerow(allArray)
-
 X = numpy.asarray(X)
 Y = numpy.asarray(Y)
 # Y = Y.reshape(Y.shape[0], 1)
@@ -329,29 +307,30 @@ arrayLength = X.shape[1]
 seed = 123456
 numpy.random.seed(seed)
 
-batch_size = 100
+batch_size = 50
 num_classes = 2
-epochs = 10
+epochs = 2
 img_x, img_y = 1, X.shape[1]
 
 # define 10-fold cross validation test harness
-kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+kfold = StratifiedKFold(n_splits=3, shuffle=True, random_state=seed)
 cvscores = []
 tprs = []
 aucs = []
 mean_fpr = numpy.linspace(0, 1, 100)
 i = 0
 
-w_array = numpy.ones((2, 2))
-class_weight = class_weight.compute_class_weight('balanced', numpy.unique(Y), Y)
-w_array[1, 0] = class_weight[0]
-w_array[0, 1] = class_weight[1]
-ncce = functools.partial(custom_loss_4, weights=w_array)
-
-print("w_array:", w_array)
-print("class_weight:", class_weight)
-
 for fold, (train, test) in enumerate(kfold.split(X, Y)):
+
+    logdir = "./log_taylor_2_fold_" + str(fold) + "/"
+    ckptdir = logdir + '_model'
+
+    if not os.path.exists(logdir):
+        os.mkdir(logdir)
+
+    if not os.path.exists(ckptdir):
+        os.mkdir(ckptdir)
+
     print('fold:%s' % fold)
     start_time = datetime.now()
 
@@ -368,7 +347,7 @@ for fold, (train, test) in enumerate(kfold.split(X, Y)):
 
     # x_train = kx_train_res.reshape(kx_train_res.shape[0], img_x, img_y, 1)
     x_train = kx_train_res
-    x_test = X[test].reshape(X[test].shape[0], img_y)
+    x_test = X[test]
 
     x_train = x_train.astype('float32')
     x_test = x_test.astype('float32')
@@ -376,48 +355,74 @@ for fold, (train, test) in enumerate(kfold.split(X, Y)):
     y_train = keras.utils.to_categorical(ky_train_res, num_classes)
     y_test = keras.utils.to_categorical(Y[test], num_classes)
 
+    train_data = Dataset(x_train, y_train)
+
     x_placeholder = tf.placeholder(tf.float32, [None, img_y])
     y_placeholder = tf.placeholder(tf.float32, [None, 2], name="truth")
 
+    trainingFlag = tf.placeholder_with_default(True, shape=[], name='training')
+
     reshaped_input = tf.reshape(x_placeholder, [-1, img_x, img_y, 1], name="absolute_input")
 
-    x = tf.keras.layers.Conv2D(filters=128, kernel_size=[3, 3], strides=(1, 1), padding='same', activation='relu')(
+    y_pred = tf.keras.layers.Conv2D(filters=128, kernel_size=[3, 3], strides=(1, 1), padding='same', activation='relu')(
         reshaped_input)
-    x = tf.keras.layers.MaxPool2D(pool_size=(1, 1), strides=(1, 1))(x)
-    x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Dense(256, activation='relu')(x)
+    y_pred = tf.keras.layers.MaxPool2D(pool_size=(1, 1), strides=(1, 1))(y_pred)
+    y_pred = tf.keras.layers.Flatten()(y_pred)
+    y_pred = tf.keras.layers.Dense(256, activation='relu')(y_pred)
 
-    prediction = tf.keras.layers.Dense(2, activation='softmax', name="absolute_output")(x)
+    y_pred = tf.keras.layers.Dense(2, activation='softmax', name="absolute_output")(y_pred)
 
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=y_placeholder))
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_pred, labels=y_placeholder))
 
     train_optim = tf.train.AdamOptimizer().minimize(loss)
-    mnist_data = Dataset(x_train, y_train)
+
+    correct_prediction = tf.equal(tf.argmax(y_pred, 1), tf.argmax(y_placeholder, 1))
+    train_accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+    tf.add_to_collection('sensitivity_analysis', trainingFlag)
+    tf.add_to_collection('sensitivity_analysis', x_placeholder)
+    tf.add_to_collection('sensitivity_analysis', y_pred)
+
+    cost_summary = tf.summary.scalar('Train Cost', loss)
+    accuray_summary = tf.summary.scalar('Train Accuracy', train_accuracy)
+    summary = tf.summary.merge_all()
+
+    saver = tf.train.Saver()
+    file_writer = tf.summary.FileWriter(logdir, tf.get_default_graph())
 
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
         sess.run(init)
 
-        for _ in range(10):
-            batch_x, batch_y = mnist_data.next_batch(50)
-            sess.run(train_optim, feed_dict={x_placeholder: batch_x, y_placeholder: batch_y})
+        for epoch in range(epochs):
+            total_batch = int(train_data._num_examples / batch_size)
+            avg_cost = 0
+            avg_acc = 0
 
-        acc_pred = tf.keras.metrics.categorical_accuracy(y_placeholder, prediction)
-        predict_score = sess.run(acc_pred, feed_dict={y_placeholder: y_test, x_placeholder: x_test})
+            for _ in range(10):
+                batch_x, batch_y = train_data.next_batch(batch_size)
+                _, c, a, summary_str = sess.run([train_optim, loss, train_accuracy, summary],
+                                                feed_dict={x_placeholder: batch_x, y_placeholder: batch_y})
+                avg_cost += c / total_batch
+                avg_acc += a / total_batch
 
-        print('accuracy: %.3f' % (sum(predict_score) / len(y_test)))
+                file_writer.add_summary(summary_str, epoch * total_batch + i)
 
-        # output_tensor = model.output
-        # input_tensor = model.input
-        # sess = K.get_session()
+            print('Epoch:', '%04d' % (epoch + 1), 'cost =', '{:.9f}'.format(avg_cost), 'accuracy =',
+                  '{:.9f}'.format(avg_acc))
 
-        history = AccuracyHistory()
+            saver.save(sess, ckptdir)
+
+        test_accuracy_score = sess.run(train_accuracy, feed_dict={x_placeholder: x_test, y_placeholder: y_test})
+        print('test Accuracy:', test_accuracy_score)
+
+        predict_score = sess.run(y_pred, feed_dict={x_placeholder: x_test, y_placeholder: y_test})
 
         scoring = {'tp': make_scorer(tp), 'tn': make_scorer(tn), 'fp': make_scorer(fp), 'fn': make_scorer(fn)}
 
         targetNames = ['class 0', 'class 1']
         y_test_argmax = argmax(y_test, axis=1)
-        predict_argmax = predict_score
+        predict_argmax = argmax(predict_score, axis=1)
 
         print(classification_report(y_test_argmax, predict_argmax, target_names=targetNames))
 
@@ -428,7 +433,7 @@ for fold, (train, test) in enumerate(kfold.split(X, Y)):
         print('roc:%.2f%%' % roc_auc_score(y_test_argmax, predict_argmax))
 
         # Compute ROC curve and area the curve
-        fpr, tpr, thresholds = roc_curve(Y[test], predict_score)
+        fpr, tpr, thresholds = roc_curve(Y[test], predict_score[:, 1])
         # fpr, tpr, thresholds = roc_curve(y_test_argmax, predict_argmax)
 
         tprs.append(interp(mean_fpr, fpr, tpr))
@@ -441,9 +446,37 @@ for fold, (train, test) in enumerate(kfold.split(X, Y)):
         scores = predict_score
         cvscores.append(scores[1] * 100)
 
-        end_time = datetime.now()
+    tf.reset_default_graph()
 
-        print("The ", fold, " fold Duration: {}".format(end_time - start_time))
+    sess = tf.InteractiveSession()
+
+    new_saver = tf.train.import_meta_graph(ckptdir + '.meta')
+    new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
+
+    SA = tf.get_collection('sensitivity_analysis')
+    training = SA[0]
+    new_x_placeholder = SA[1]
+    new_y_pred = SA[2]
+
+    SA_scores = [tf.square(tf.gradients(new_y_pred[:, i], new_x_placeholder)) for i in range(2)]
+
+    images = x_train
+    labels = y_train
+
+    sample_imgs = []
+    for i in range(2):
+        sample_imgs.append(images[numpy.argmax(labels, axis=1) == i][3])
+
+    hmaps = numpy.reshape(
+        [sess.run(SA_scores[i], feed_dict={new_x_placeholder: sample_imgs[i][None, :], training: False}) for i in
+         range(2)],
+        [2, 259])
+
+    sess.close()
+
+    end_time = datetime.now()
+
+    print("The ", fold, " fold Duration: {}".format(end_time - start_time))
 
 print("%.2f%% (+/- %.2f%%)" % (numpy.mean(cvscores), numpy.std(cvscores)))
 
