@@ -43,7 +43,7 @@ total_start_time = datetime.now()
 def get_Data():
     X = []
     Y = []
-    dataFile = "../data/259_2000.csv"
+    dataFile = "../data/259.csv"
     print("data File:", dataFile)
 
     for index, line in enumerate(open(dataFile, 'r').readlines()):
@@ -70,7 +70,7 @@ def get_Data():
     return X, Y
 
 
-batch_size = 50
+batch_size = 500
 num_classes = 2
 num_features = 259
 collection_name = "sensitivity_analysis"
@@ -139,6 +139,7 @@ def run_taylor_decompostion(x_train, y_train, logdir, ckptdir):
 
     return hmaps
 
+
 def run_sensitivity_analysis(checkpoint_infos, class_num, feature_num, collection_name):
     hmaps = numpy.zeros([class_num, feature_num], dtype=numpy.float32)
 
@@ -157,7 +158,7 @@ def run_sensitivity_analysis(checkpoint_infos, class_num, feature_num, collectio
         new_x_placeholder = SA[1]
         new_y_pred = SA[2]
 
-        #SA_scores = [tf.square(tf.gradients(new_y_pred[:, i], new_x_placeholder)) for i in range(class_num)]
+        # SA_scores = [tf.square(tf.gradients(new_y_pred[:, i], new_x_placeholder)) for i in range(class_num)]
         SA_scores = [new_x_placeholder * tf.gradients(new_y_pred[:, i], new_x_placeholder) for i in range(class_num)]
 
         hmap = numpy.reshape(
@@ -170,8 +171,9 @@ def run_sensitivity_analysis(checkpoint_infos, class_num, feature_num, collectio
 
     return hmaps / (len(checkpoint_infos))
 
+
 def run_deep_taylor_decomposition(checkpoint_infos, class_num, feature_num, collection_name):
-    hmaps = numpy.zeros([class_num, feature_num], dtype=numpy.float32)
+    hmaps = []
 
     for i, checkpoint_info in enumerate(checkpoint_infos):
         logdir, ckptdir, sample_imgs = checkpoint_info[0], checkpoint_info[1], checkpoint_info[2]
@@ -204,9 +206,10 @@ def run_deep_taylor_decomposition(checkpoint_infos, class_num, feature_num, coll
         imgs = []
         for i in range(2):
             imgs.append(sess.run(Rs[i], feed_dict={x_placeholder_new: sample_imgs[i][None, :]}))
+        hmaps.append(imgs)
 
         sess.close()
-    return imgs
+    return hmaps
 
 
 def plot_draw(cvscores, tprs, aucs):
@@ -386,8 +389,8 @@ def cross_validate(session, X, Y, epochs, class_num, feature_num, collection_nam
 hmaps = []
 with tf.Session() as session:
     X, Y = get_Data()
-    split_size = 3
-    epochs = 5
+    split_size = 5
+    epochs = 50
 
     session.run(tf.global_variables_initializer())
 
@@ -398,8 +401,11 @@ with tf.Session() as session:
     # print("Test accuracy: %f" % session.run(accuracy, feed_dict={x_placeholder: test_x, y_placeholder: test_y}))
 
 hmaps = run_deep_taylor_decomposition(checkpoints, num_classes, num_features, collection_name)
-# hmaps.append(hmap)
-print("relevance scores: %s" % hmaps)
+nhmaps = numpy.array(hmaps)
+numpy.save("hmaps", nhmaps)
+print("relevance scores shape: ", nhmaps.shape)
+print("relevance scores shape: ", numpy.shape(hmaps))
+print("relevance scores: %s" % nhmaps[1])
 
 total_end_time = datetime.now()
 print("/n/n total duration : {}".format(total_end_time, total_start_time))
