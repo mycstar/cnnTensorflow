@@ -27,25 +27,14 @@ from models_2_4 import MNIST_CNN, Taylor
 
 ## output roc plot according to cross-validation,
 
-def tp(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 0]
-
-
-def tn(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 0]
-
-
-def fp(y_true, y_pred): return confusion_matrix(y_true, y_pred)[1, 0]
-
-
-def fn(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 1]
-
-
 total_start_time = datetime.now()
 
 batch_size = 50
 num_classes = 2
 num_features = 259
 collection_name = "sensitivity_analysis"
-
+split_size = 3
+epochs = 2
 
 def get_Data():
     X = []
@@ -220,8 +209,6 @@ def run_test(session, x_test, y_test, cvscores, tprs, fprs, aucs, fold):
     print('test Accuracy:', test_accuracy_score)
 
     predict_score = session.run(prediction, feed_dict={x_placeholder: x_test, y_placeholder: y_test})
-
-    scoring = {'tp': make_scorer(tp), 'tn': make_scorer(tn), 'fp': make_scorer(fp), 'fn': make_scorer(fn)}
 
     targetNames = ['class 0', 'class 1']
     y_test_argmax = argmax(y_test, axis=1)
@@ -450,8 +437,6 @@ hmaps = []
 
 with tf.Session() as session:
     X, Y = get_Data()
-    split_size = 3
-    epochs = 2
 
     session.run(tf.global_variables_initializer())
 
