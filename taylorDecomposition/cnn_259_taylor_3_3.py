@@ -8,7 +8,7 @@ import tensorflow as tf
 
 from sklearn.metrics import classification_report, roc_auc_score, roc_curve, make_scorer, confusion_matrix
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import roc_curve, auc, precision_recall_curve
+from sklearn.metrics import auc, precision_recall_curve
 
 import numpy
 from numpy import argmax
@@ -25,6 +25,8 @@ from batchDataset import Dataset
 from models_2_4 import MNIST_CNN, Taylor
 
 
+## output roc plot according to cross-validation,
+
 def tp(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 0]
 
 
@@ -38,6 +40,11 @@ def fn(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 1]
 
 
 total_start_time = datetime.now()
+
+batch_size = 50
+num_classes = 2
+num_features = 259
+collection_name = "sensitivity_analysis"
 
 
 def get_Data():
@@ -69,11 +76,6 @@ def get_Data():
 
     return X, Y
 
-
-batch_size = 50
-num_classes = 2
-num_features = 259
-collection_name = "sensitivity_analysis"
 
 img_x, img_y = 1, num_features
 
@@ -239,9 +241,9 @@ def run_test(session, x_test, y_test, cvscores, tprs, fprs, aucs, fold):
     mean_fpr = numpy.linspace(0, 1, 100)
 
     fprs[fold] = fpr
-    #print(str(fold), ' fold fpr:', str(len(fpr)))
+    # print(str(fold), ' fold fpr:', str(len(fpr)))
     tprs[fold] = tpr
-    #print(str(fold), ' fold tpr:', str(len(tpr)))
+    # print(str(fold), ' fold tpr:', str(len(tpr)))
 
     roc_auc = auc(fpr, tpr)
     aucs[fold] = roc_auc
@@ -357,8 +359,8 @@ def run_train(session, x_train, y_train, logdir, ckptdir, epochs):
 
 
 def plot_precision_recall_vs_threshold(precisions, recalls, thresholds, fold):
-    plt.plot(thresholds, precisions[:-1],  label='Precision fold %d' % fold)
-    plt.plot(thresholds, recalls[:-1],  label='Recall fold %d' % fold)
+    plt.plot(thresholds, precisions[:-1], label='Precision fold %d' % fold)
+    plt.plot(thresholds, recalls[:-1], label='Recall fold %d' % fold)
 
 
 def cross_validate(session, X, Y, epochs, class_num, feature_num, collection_name, split_size=5):
@@ -435,7 +437,7 @@ def cross_validate(session, X, Y, epochs, class_num, feature_num, collection_nam
     plt.xlabel("Threshold")
     plt.legend(loc='lower right')
     plt.ylim([0, 1])
-    plt.savefig('./' + cur_script_name() +'_precision_recall')
+    plt.savefig('./' + cur_script_name() + '_precision_recall')
     plt.close()
 
     # draw plot
@@ -443,7 +445,9 @@ def cross_validate(session, X, Y, epochs, class_num, feature_num, collection_nam
 
     return results, checkpoints
 
+
 hmaps = []
+
 with tf.Session() as session:
     X, Y = get_Data()
     split_size = 3
