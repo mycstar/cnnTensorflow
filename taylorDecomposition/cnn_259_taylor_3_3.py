@@ -5,6 +5,7 @@ import time
 
 import keras
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
 
 from sklearn.metrics import classification_report, roc_auc_score, roc_curve, make_scorer, confusion_matrix
 from sklearn.model_selection import StratifiedKFold
@@ -65,6 +66,10 @@ def get_Data():
 
     return X, Y
 
+def model_summary():
+    model_vars = tf.trainable_variables()
+    slim.model_analyzer.analyze_vars(model_vars, print_info=True)
+
 
 img_x, img_y = 1, num_features
 
@@ -93,6 +98,9 @@ with tf.name_scope('Classifier'):
 
     correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(y_placeholder, 1))
     train_accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+    model_summary()
+
 
 cost_summary = tf.summary.scalar('Train Cost', cost)
 accuray_summary = tf.summary.scalar('Train Accuracy', train_accuracy)
@@ -449,7 +457,7 @@ with tf.Session() as session:
 hmaps = run_deep_taylor_decomposition(checkpoints, num_classes, num_features, collection_name)
 
 nhmaps = numpy.array(hmaps)
-numpy.save("hmaps", nhmaps)
+numpy.save(cur_script_name()+"hmaps", nhmaps)
 
 print("relevance scores: %s" % hmaps)
 
