@@ -24,6 +24,8 @@ from batchDataset import Dataset
 
 from models_2_4 import MNIST_CNN, Taylor
 
+## output roc plot based on every fpr, tpr seperately,
+
 
 def tp(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 0]
 
