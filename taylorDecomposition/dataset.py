@@ -77,11 +77,20 @@ class DataSet(object):
             np.random.shuffle(self._perm)
         print("Reading data done")
 
+    def reset(self):
+        self._num_data = len(self._raw)
+        self._epochs_completed = 0
+        self._index_in_epoch = 0
+
+        self._perm = np.arange(self._num_data)
+        np.random.shuffle(self._perm)
+        print("reset data done")
+
     def next_batch(self, batch_size):
         start = self._index_in_epoch
         self._index_in_epoch += batch_size
 
-        if self._index_in_epoch > self._num_data:
+        if self._index_in_epoch > self._num_data and start > 0:
             # print("%d epoch finish!" % self._epochs_completed)
             # finished epoch
             self._epochs_completed += 1
@@ -91,15 +100,34 @@ class DataSet(object):
             # start next epoch
             start = 0
             self._index_in_epoch = batch_size
-            assert batch_size <= self._num_data
+            # assert batch_size <= self._num_data
 
         end = self._index_in_epoch
         idxs = self._perm[start:end]
+
         return self.parse_data(idxs)
 
+    def next_sample_random(self, with_raw=False):
+
+        start = np.random.randint(0, self._num_data)
+
+        idxs = self._perm[start:start + 1]
+
+        return self.parse_data(idxs, with_raw)
+
+    def next_sample(self, with_raw=False):
+
+        start = np.random.randint(0, self._num_data)
+
+        idxs = self._perm[start:start + 1]
+
+        return self.parse_data(idxs, with_raw)
+
     def iter_batch(self, batch_size, max_iter):
+        # print("\n %d max_iter" % max_iter)
         while True:
             batch = self.next_batch(batch_size)
+            # print("\n %d self._epochs_completed" % self._epochs_completed)
 
             if self._epochs_completed >= max_iter:
                 break
