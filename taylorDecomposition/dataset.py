@@ -31,6 +31,8 @@ CHARLEN = 21
 ## ######################## ## 
 def encoding_seq_np(seq, arr):
     for i, c in enumerate(seq):
+        if i == 999:
+            print("999")
         if c == "_":
             # let them zero
             continue
