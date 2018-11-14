@@ -8,7 +8,7 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
 from sklearn.metrics import classification_report, roc_auc_score, roc_curve, make_scorer, confusion_matrix
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 from sklearn.metrics import auc, precision_recall_curve
 
 import numpy
@@ -24,15 +24,12 @@ from datetime import datetime
 from batchDataset import Dataset
 
 from models_2_4 import MNIST_CNN, Taylor
-from model import get_placeholders, inference
-
-from dataset import DataSet
 
 ## output roc plot according to cross-validation,
 
 total_start_time = datetime.now()
 
-batch_size = 10
+batch_size = 100
 num_classes = 2
 num_features = 21000
 seq_len = 1000
@@ -40,12 +37,6 @@ num_features_per = 21
 collection_name = "sensitivity_analysis"
 split_size = 5
 epochs = 20
-window_lengths = [256, 256, 256, 256, 256, 256, 256, 256, 256]
-num_windows = [8, 12, 16, 20, 24, 28, 32, 36, 40]
-num_hidden = 256
-keep_prob = 0.9
-regularizer = 0.001
-learning_rate = 0.005
 
 CHARSET = {'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, \
            'I': 7, 'K': 8, 'L': 9, 'M': 10, 'N': 11, 'P': 12, 'Q': 13, \
@@ -61,6 +52,8 @@ def encoding_seq_np(seq):
     arr = numpy.zeros((1, CHARLEN * 1000), dtype=numpy.float32)
     for i, c in enumerate(seq):
         if i == 1000:
+            continue
+        if c == '\n':
             continue
         if c == "_":
             # let them zero
@@ -80,13 +73,16 @@ def encoding_seq_np(seq):
 def get_Data():
     X = []
     Y = []
-    dataFile = "/data1/projectpy/DeepFam/data/COG-500-1074/90percent/data388to1_withanother2.txt"
+    dataFile = "/home/myc/projectpy/DeepFam/data/COG-500-1074/90percent/data_200000.txt"
     print("data File:", dataFile)
 
     for index, line in enumerate(open(dataFile, 'r').readlines()):
         w = line.split('\t')
         label = w[0]
         features = w[1]
+        # if index ==99999:
+        #     print("haha")
+        # print("data line:", index)
 
         try:
             label = [int(x) for x in label]
@@ -130,13 +126,15 @@ def run_test(session, train_accuracy, prediction, x_placeholder, y_placeholder, 
         batch_x, batch_y = train_data.next_batch(batch_size)
 
         test_accuracy_score = session.run(train_accuracy, feed_dict={x_placeholder: batch_x, y_placeholder: batch_y})
-        print('test Accuracy:', test_accuracy_score)
+
         test_accuracy_scores.append(test_accuracy_score)
 
         predict_score = session.run(prediction, feed_dict={x_placeholder: batch_x, y_placeholder: batch_y})
         labels.extend(batch_y)
         predict_scores.extend(predict_score)
         j = j + 1
+
+    print('test Accuracy mean:', numpy.mean(test_accuracy_scores))
 
     targetNames = ['class 0', 'class 1']
 
@@ -270,7 +268,7 @@ def cross_validate(X, Y, epochs, class_num, feature_num, collection_name, split_
 
     seed = 123456
 
-    kfold = StratifiedKFold(n_splits=split_size, shuffle=True, random_state=5)
+    kfold = StratifiedKFold(n_splits=split_size, shuffle=True, random_state=56465)
     current_time = time.time()
     time_tag = str(int(current_time))
 
@@ -303,9 +301,11 @@ def cross_validate(X, Y, epochs, class_num, feature_num, collection_name, split_
 
         y_train = keras.utils.to_categorical(ky_train, num_classes)
         y_test = keras.utils.to_categorical(Y[test], num_classes)
-        # train
 
+        # train
+        tf.reset_default_graph()
         with tf.name_scope('Classifier'):
+
             # Initialize neural network
             DNN = MNIST_CNN('CNN')
 
@@ -377,15 +377,15 @@ def cross_validate(X, Y, epochs, class_num, feature_num, collection_name, split_
                 print('Epoch:', '%04d' % (epoch + 1), 'cost =', '{:.9f}'.format(avg_cost), 'accuracy =',
                       '{:.9f}'.format(avg_acc))
 
-                # saver.save(sess, ckptdir)
+            saver.save(sess, ckptdir)
                 # print('Accuracy:', session.run(accuracy, feed_dict={X: mnist.test.images, Y: mnist.test.labels}))
 
                 # print('Accuracy:', session.run(train_accuracy, feed_dict={x_placeholder: x_test, y_placeholder: y_test}))
                 # test
-                test_accuracy_score, predict_score = run_test(sess, train_accuracy, prediction, x_placeholder,
+            test_accuracy_score, predict_score = run_test(sess, train_accuracy, prediction, x_placeholder,
                                                               y_placeholder, x_test, y_test, cvscores, tprs, fprs, aucs,
                                                               fold)
-                results.append(test_accuracy_score)
+            results.append(test_accuracy_score)
 
         end_time = datetime.now()
 

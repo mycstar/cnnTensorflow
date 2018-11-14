@@ -19,9 +19,6 @@ class Dataset(object):
             #print(index0)
             self._images = np.array(self._images)[index0]
             self._labels = np.array(self._labels)[index0]
-            #print(self._images)
-            #print(self._labels)
-            #print("-----------------")
 
         if start + batch_size > self._num_examples:
             self._epochs_completed += 1
