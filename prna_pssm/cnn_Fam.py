@@ -21,27 +21,28 @@ import matplotlib.pyplot as plt
 
 from datetime import datetime
 
-from batchDataset import Dataset
+from taylor_Decomposition import ProteinDataSet
 
-from models_2_4 import MNIST_CNN, Taylor
 from model import get_placeholders, inference
+
+from imblearn.combine import SMOTEENN
 
 ## output roc plot according to cross-validation,
 
 total_start_time = datetime.now()
 
-batch_size = 50
+batch_size = 200
 num_classes = 2
-num_features = 75
-seq_len = 5
-num_features_per = 15
+num_features = 279
+seq_len = 9
+num_features_per = 31
 collection_name = "sensitivity_analysis"
-split_size = 3
-epochs = 2
-window_lengths = [48, 48, 48, 48, 48]
-num_windows = [8, 12, 16, 20, 24]
-num_hidden = 256
-keep_prob = 0.9
+split_size = 5
+epochs = 20
+num_windows = [256, 256, 256, 256, 256, 256, 256, 256, 256]
+window_lengths = [8, 12, 16, 20, 24, 28, 32, 36, 40]
+num_hidden = 512
+keep_prob = 0.7
 regularizer = 0.001
 learning_rate = 0.005
 
@@ -49,13 +50,13 @@ learning_rate = 0.005
 def get_Data():
     X = []
     Y = []
-    dataFile = "/data1/projectpy/cnnTensorflow/data/aaencodebylabel15X5.csv"
+    dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/279.csv"
     print("data File:", dataFile)
 
     for index, line in enumerate(open(dataFile, 'r').readlines()):
         w = line.split(',')
-        label = w[0:1]
-        features = w[3:]
+        label = w[-1:]
+        features = w[:-1]
 
         try:
             label = [int(x) for x in label]
@@ -84,120 +85,70 @@ def model_summary():
 img_x, img_y = 1, num_features
 
 
-def run_taylor_decompostion(x_train, y_train, logdir, ckptdir):
-    tf.reset_default_graph()
-
-    sess = tf.InteractiveSession()
-
-    new_saver = tf.train.import_meta_graph(ckptdir + '.meta')
-    new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
-
-    SA = tf.get_collection('sensitivity_analysis')
-    training = SA[0]
-    new_x_placeholder = SA[1]
-    new_y_pred = SA[2]
-
-    SA_scores = [tf.square(tf.gradients(new_y_pred[:, i], new_x_placeholder)) for i in range(2)]
-
-    images = x_train
-    labels = y_train
-
-    sample_imgs = []
-    for i in range(2):
-        sample_imgs.append(images[numpy.argmax(labels, axis=1) == i][3])
-
-    hmaps = numpy.reshape(
-        [sess.run(SA_scores[i], feed_dict={new_x_placeholder: sample_imgs[i][None, :], training: False}) for i in
-         range(2)],
-        [2, 259])
-
-    sess.close()
-
-    return hmaps
-
-
-def run_sensitivity_analysis(checkpoint_infos, class_num, feature_num, collection_name):
-    hmaps = numpy.zeros([class_num, feature_num], dtype=numpy.float32)
-
-    for i, checkpoint_info in enumerate(checkpoint_infos):
-        logdir, ckptdir, sample_imgs = checkpoint_info[0], checkpoint_info[1], checkpoint_info[2]
-
-        tf.reset_default_graph()
-
-        sess = tf.InteractiveSession()
-
-        new_saver = tf.train.import_meta_graph(ckptdir + '.meta')
-        new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
-
-        SA = tf.get_collection(collection_name)
-        training = SA[0]
-        new_x_placeholder = SA[1]
-        new_y_pred = SA[2]
-
-        # SA_scores = [tf.square(tf.gradients(new_y_pred[:, i], new_x_placeholder)) for i in range(class_num)]
-        SA_scores = [new_x_placeholder * tf.gradients(new_y_pred[:, i], new_x_placeholder) for i in range(class_num)]
-
-        hmap = numpy.reshape(
-            [sess.run(SA_scores[i], feed_dict={new_x_placeholder: sample_imgs[i][None, :], training: False}) for i in
-             range(class_num)], [class_num, feature_num])
-
-        hmaps = hmaps + hmap
-
-        sess.close()
-
-    return hmaps / (len(checkpoint_infos))
-
-
-def run_deep_taylor_decomposition(checkpoint_infos, class_num, feature_num, collection_name):
-    hmaps = []
-
-    for i, checkpoint_info in enumerate(checkpoint_infos):
-        logdir, ckptdir, sample_imgs = checkpoint_info[0], checkpoint_info[1], checkpoint_info[2]
-
-        tf.reset_default_graph()
-
-        sess = tf.InteractiveSession()
-
-        new_saver = tf.train.import_meta_graph(ckptdir + '.meta')
-        new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
-
-        weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CNN')
-        activations = tf.get_collection('DTD')
-        x_placeholder_new = activations[0]
-
-        conv_ksize = [1, 3, 3, 1]
-        pool_ksize = [1, 2, 2, 1]
-        conv_strides = [1, 1, 1, 1]
-        pool_strides = [1, 2, 2, 1]
-
-        weights.reverse()
-        activations.reverse()
-
-        taylor = Taylor(activations, weights, conv_ksize, pool_ksize, conv_strides, pool_strides, 'Taylor')
-
-        Rs = []
-        for i in range(2):
-            Rs.append(taylor(i))
-
-        imgs = []
-        for i in range(2):
-            imgs.append(sess.run(Rs[i], feed_dict={x_placeholder_new: sample_imgs[i][None, :]}))
-        hmaps.append(imgs)
-
-        sess.close()
-    return hmaps
-
-
-def run_test(session, x_test, y_test, cvscores, tprs, fprs, aucs, fold):
+def run_test(checkpoint_path, x_test, y_test, cvscores, tprs, fprs, aucs, fold):
     print('testing account:', len(x_test))
-    test_accuracy_score = session.run(train_accuracy, feed_dict={x_placeholder: x_test, y_placeholder: y_test})
-    print('test Accuracy:', test_accuracy_score)
 
-    predict_score = session.run(prediction, feed_dict={x_placeholder: x_test, y_placeholder: y_test})
+
+    with tf.Graph().as_default():
+        # placeholder
+        placeholders = get_placeholders(num_features, num_classes)
+
+        # prediction
+        pred, layers = inference(placeholders['data'], seq_len, num_features_per, num_classes, window_lengths,
+                                 num_windows,
+                                 num_hidden, keep_prob, regularizer,
+                                 for_training=False)
+
+        prediction = tf.nn.softmax(pred)
+
+        # calculate prediction
+        # accuracy
+        _acc_op = tf.equal(tf.argmax(pred, 1), tf.argmax(placeholders['labels'], 1))
+        train_accuracy = tf.reduce_mean(tf.cast(_acc_op, tf.float32))
+
+        # create saver
+        saver = tf.train.Saver()
+
+        # summary
+        summary_op = tf.summary.merge_all()
+
+        with tf.Session() as sess:
+            # load model
+            ckpt = tf.train.latest_checkpoint(os.path.dirname(checkpoint_path))
+            if tf.train.checkpoint_exists(ckpt):
+                saver.restore(sess, ckpt)
+                global_step = ckpt.split('/')[-1].split('-')[-1]
+
+            else:
+                #logging("[ERROR] Checkpoint not exist", FLAGS)
+                return
+
+            dataset = ProteinDataSet(x_test, y_test)
+
+            total_batch = int(dataset._num_examples / batch_size)
+
+            test_accuracy_scores = []
+            predict_scores = []
+            labelss = []
+
+            for data, labels in dataset.iter_batch(batch_size, 1):
+
+                predict_score, test_accuracy_score = sess.run([prediction, train_accuracy],
+                                                              feed_dict={placeholders['data']: data,
+                                                                         placeholders['labels']: labels})
+
+                print('test Accuracy:', test_accuracy_score)
+                test_accuracy_scores.append(test_accuracy_score)
+
+                predict_scores.append(predict_score)
+                labelss.append(labels)
+
+    labelss = numpy.reshape(labelss, (dataset._num_data, num_classes))
+    predict_scores = numpy.reshape(predict_scores, (dataset._num_data, num_classes))
 
     targetNames = ['class 0', 'class 1']
-    y_test_argmax = argmax(y_test, axis=1)
-    predict_argmax = argmax(predict_score, axis=1)
+    y_test_argmax = argmax(labelss, axis=1)
+    predict_argmax = argmax(predict_scores, axis=1)
 
     print(classification_report(y_true=y_test_argmax, y_pred=predict_argmax, target_names=targetNames))
 
@@ -262,12 +213,10 @@ def cur_script_name():
     script_name = argv0_list[len(argv0_list) - 1]  # get script file name self
     print("current script:", script_name)
     script_name = script_name[0:-3]  # remove ".py"
-    script_num = script_name.split('_')[2]
-
     return script_name
 
 
-def plot_draw_cross_validation(cvscores, tprso, fprs, aucs):
+def plot_draw_cross_validation(fold, cvscores, tprso, fprs, aucs):
     plt.plot([0, 1], [0, 1], linestyle='--', lw=2, color='navy', label='Luck', alpha=.8)
     tprs = []
     mean_fpr = numpy.linspace(0, 1, 100)
@@ -298,7 +247,7 @@ def plot_draw_cross_validation(cvscores, tprso, fprs, aucs):
     plt.legend(loc="lower right")
     # plt.show()
     script_name = cur_script_name()
-    plt.savefig(script_name + ".png")
+    plt.savefig(script_name + "_fold"+fold+".png")
 
 
 def plot_precision_recall_vs_threshold(precisions, recalls, thresholds, fold):
@@ -306,7 +255,7 @@ def plot_precision_recall_vs_threshold(precisions, recalls, thresholds, fold):
     plt.plot(thresholds, recalls[:-1], label='Recall fold %d' % fold)
 
 
-def cross_validate(X, Y, epochs, class_num, feature_num, collection_name, split_size=5):
+def cross_validate(X, Y):
     results = []
     hmaps = []
     cvscores = dict()
@@ -338,6 +287,10 @@ def cross_validate(X, Y, epochs, class_num, feature_num, collection_name, split_
 
         x_train = X[train]
         ky_train = Y[train]
+
+        sm = SMOTEENN(ratio='auto', n_jobs=6)
+
+        x_train, ky_train = sm.fit_sample(x_train, numpy.ravel(ky_train))
 
         x_test = X[test]
 
@@ -381,7 +334,7 @@ def cross_validate(X, Y, epochs, class_num, feature_num, collection_name, split_
                 sess.run(tf.global_variables_initializer())
                 print("\n Start training")
 
-                train_data = Dataset(x_train, y_train)
+                train_data = ProteinDataSet(x_train, y_train)
 
                 saver = tf.train.Saver()
                 file_writer = tf.summary.FileWriter(logdir, tf.get_default_graph())
@@ -394,8 +347,8 @@ def cross_validate(X, Y, epochs, class_num, feature_num, collection_name, split_
                     for i in range(total_batch):
                         batch_x, batch_y = train_data.next_batch(batch_size)
                         _, c, a, summary_str = sess.run([optimizer, cost, train_accuracy, summary],
-                                                           feed_dict={placeholders['data']: batch_x,
-                                                                      placeholders['labels']: batch_y})
+                                                        feed_dict={placeholders['data']: batch_x,
+                                                                   placeholders['labels']: batch_y})
                         avg_cost += c / total_batch
                         avg_acc += a / total_batch
 
@@ -404,65 +357,40 @@ def cross_validate(X, Y, epochs, class_num, feature_num, collection_name, split_
                     print('Epoch:', '%04d' % (epoch + 1), 'cost =', '{:.9f}'.format(avg_cost), 'accuracy =',
                           '{:.9f}'.format(avg_acc))
 
-                    saver.save(session, ckptdir)
+                    saver.save(sess, ckptdir)
                 # print('Accuracy:', session.run(accuracy, feed_dict={X: mnist.test.images, Y: mnist.test.labels}))
 
             # print('Accuracy:', session.run(train_accuracy, feed_dict={x_placeholder: x_test, y_placeholder: y_test}))
             # test
-            test_accuracy_score, predict_score = run_test(session, x_test, y_test, cvscores, tprs, fprs, aucs, fold)
-            results.append(test_accuracy_score)
+
+        test_accuracy_score, predict_score = run_test(ckptdir, x_test, y_test,
+                                                      cvscores, tprs, fprs, aucs, fold)
+        results.append(test_accuracy_score)
 
         precisions, recalls, thresholds = precision_recall_curve(argmax(y_test, axis=1), argmax(predict_score, axis=1))
         plot_precision_recall_vs_threshold(precisions, recalls, thresholds, fold)
 
-        # taylor decompostion
-        images = x_train
-        labels = y_train
-
-        sample_img = []
-        for i in range(num_classes):
-            sample_img.append(images[numpy.argmax(labels, axis=1) == i][3])
-
-        checkpoint.append(sample_img)
-
-        checkpoints.append(checkpoint)
-
-        # hmap = run_taylor_decompostion(x_train, y_train, logdir, ckptdir)
-        # hmaps.append(hmap)
-
         end_time = datetime.now()
 
         print("The ", fold, " fold Duration: {}".format(end_time - start_time))
-    # draw precision recall plot and then close plt
-    plt.xlabel("Threshold")
-    plt.legend(loc='lower right')
-    plt.ylim([0, 1])
-    plt.savefig('./' + cur_script_name() + '_precision_recall')
-    plt.close()
 
-    # draw plot
-    plot_draw_cross_validation(cvscores, tprs, fprs, aucs)
+        # draw precision recall plot and then close plt
+        plt.xlabel("Threshold")
+        plt.legend(loc='lower right')
+        plt.ylim([0, 1])
+        plt.savefig('./' + cur_script_name() +"_fold"+fold+ '_precision_recall')
+        plt.close()
 
-    return results, checkpoints
-
-
-hmaps = []
+        # draw plot
+        plot_draw_cross_validation(fold, cvscores, tprs, fprs, aucs)
 
 
 X, Y = get_Data()
 
-results, checkpoints = cross_validate(X, Y, epochs, num_classes, num_features,
-                                      collection_name, split_size)
+cross_validate(X, Y)
 
-    # print("Cross-validation test accuracy: %s" % results)
-    # print("Test accuracy: %f" % session.run(accuracy, feed_dict={x_placeholder: test_x, y_placeholder: test_y}))
-
-hmaps = run_deep_taylor_decomposition(checkpoints, num_classes, num_features, collection_name)
-
-nhmaps = numpy.array(hmaps)
-numpy.save(cur_script_name() + "hmaps", nhmaps)
-
-print("relevance scores: %s" % hmaps)
+# print("Cross-validation test accuracy: %s" % results)
+# print("Test accuracy: %f" % session.run(accuracy, feed_dict={x_placeholder: test_x, y_placeholder: test_y}))
 
 total_end_time = datetime.now()
 print("/n/n total duration : {}".format(total_end_time, total_start_time))

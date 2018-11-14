@@ -5,8 +5,10 @@ import tensorflow.contrib.slim as slim
 import re
 
 
-def inference(data, seq_len, num_features,num_classes, window_lengths, num_windows, num_hidden, keep_prob, regularizer, for_training=False, scope=None):
-    pred, layers = network(data, seq_len, num_features,num_classes, window_lengths, num_windows, num_hidden, keep_prob, regularizer,
+def inference(data, seq_len, num_features, num_classes, window_lengths, num_windows, num_hidden, keep_prob, regularizer,
+              for_training=False, scope=None):
+    pred, layers = network(data, seq_len, num_features, num_classes, window_lengths, num_windows, num_hidden, keep_prob,
+                           regularizer,
                            is_training=for_training,
                            scope=scope)
 
@@ -20,7 +22,7 @@ def get_placeholders(num_feature, num_classes):
     return placeholders
 
 
-def network(data, seq_len, num_features,num_classes, window_lengths, num_windows, num_hidden, keep_prob, regularizer,
+def network(data, seq_len, num_features, num_classes, window_lengths, num_windows, num_hidden, keep_prob, regularizer,
             is_training=True, scope=''):
     batch_norm_params = {
         'decay': 0.9,  # might problem if too small updates
@@ -30,7 +32,7 @@ def network(data, seq_len, num_features,num_classes, window_lengths, num_windows
 
     layers = {}
 
-    x_data = tf.reshape(data, [-1, 1, seq_len*num_features, 1])
+    x_data = tf.reshape(data, [-1, 1, seq_len * num_features, 1])
 
     ###
     # define layers
@@ -44,7 +46,9 @@ def network(data, seq_len, num_features,num_classes, window_lengths, num_windows
                             normalizer_params=batch_norm_params,
                             weights_initializer=tf.contrib.layers.xavier_initializer()):
             layers['conv'] = []
+            layers['conv2'] = []
             layers['hidden1'] = []
+            layers['hidden3'] = []
             for i, wlen in enumerate(window_lengths):
                 layers['conv'].append(slim.conv2d(x_data,
                                                   num_windows[i],
@@ -56,8 +60,8 @@ def network(data, seq_len, num_features,num_classes, window_lengths, num_windows
                 # max pooling
                 max_pooled = slim.max_pool2d(layers['conv'][i],
                                              # [1, FLAGS.seq_len],
-                                             [1, seq_len - wlen + 1],
-                                             stride=[1, seq_len],
+                                             [1, 3],
+                                             stride=[1, 1],
                                              padding='VALID',
                                              scope="pool%d" % i)
                 # reshape
