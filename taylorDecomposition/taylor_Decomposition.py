@@ -178,9 +178,9 @@ def read_fasta(fasta_file, maxlen, familynumber):
 hmaps = []
 
 train_file = "/home/myc/projectpy/DeepFam/data/COG-500-1074/90percent//data_388.txt"
-# fast_file = "/home/myc/projectpy/cnnTensorflowNew/data/Q8EHI4_SHEON.txt"
+fast_file = "../data/Q8EHI4_SHEON.txt"
 #fast_file = "/home/myc/projectpy/cnnTensorflowNew/data/Q8EHI4_SHEON_5-69.txt"
-fast_file = "/home/myc/projectpy/cnnTensorflowNew/data/Q6M020_METMP_269-320"
+#fast_file = "../data/Q6M020_METMP_269-320"
 dataset = ProteinDataSet(fpath=fast_file,
                          seqlen=1000,
                          n_classes=2,
@@ -193,8 +193,8 @@ dataset = ProteinDataSet(fpath=fast_file,
 
 # ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0/_model"
 # logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0"
-ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541687626_fold_0/_model"
-logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541687626_fold_0"
+ckptdir = "./log/log_1541687626_fold_0/_model"
+logdir = "./log/log_1541687626_fold_0"
 
 data, labels, seq = dataset.next_sample_random(with_raw=True)
 
