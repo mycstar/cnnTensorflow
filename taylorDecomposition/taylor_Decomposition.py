@@ -1,27 +1,14 @@
 from __future__ import print_function
 import sys
-import os
-import time
-
-import keras
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-
-from sklearn.metrics import classification_report, roc_auc_score, roc_curve, make_scorer, confusion_matrix
-from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import auc, precision_recall_curve
-
 import numpy
-from numpy import argmax
-from scipy import interp
 import matplotlib
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from datetime import datetime
-
-from batchDataset import Dataset
 
 from models_2_4_1 import MNIST_CNN, Taylor
 from proteindataset import ProteinDataSet
