@@ -1,29 +1,16 @@
 from __future__ import print_function
 import sys
-import os
-import time
-
-import keras
-from keras import backend as K
-from keras.layers import Dense, Flatten, Activation, Conv2D, MaxPooling2D
-from keras.losses import binary_crossentropy, mean_squared_error
-from keras.models import Sequential
-
-from sklearn.model_selection import train_test_split
-
+import tensorflow as tf
+import tensorflow.contrib.slim as slim
 import numpy
-from numpy import argmax
-from scipy import interp
 import matplotlib
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from itertools import cycle
-
 from datetime import datetime
 
-from batchDataset import Dataset
+from proteindataset import ProteinDataSet
 from deepexplain.tensorflow import DeepExplain
 
 total_start_time = datetime.now()
@@ -31,180 +18,142 @@ total_start_time = datetime.now()
 batch_size = 100
 num_classes = 2
 num_features = 21000
-epochs = 5
+collection_name = "sensitivity_analysis"
+split_size = 3
+epochs = 10
 
 
-dataFile = "/data1/projectpy/DeepFam/data/COG-500-1074/90percent/data388to1_withanother.txt"
-
-CHARSET = {'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, \
-           'I': 7, 'K': 8, 'L': 9, 'M': 10, 'N': 11, 'P': 12, 'Q': 13, \
-           'R': 14, 'S': 15, 'T': 16, 'V': 17, 'W': 18, 'Y': 19, 'X': 20, \
-           'O': 20, 'U': 20,
-           'B': (2, 11),
-           'Z': (3, 13),
-           'J': (7, 9)}
-CHARLEN = 21
+def model_summary():
+    model_vars = tf.trainable_variables()
+    slim.model_analyzer.analyze_vars(model_vars, print_info=True)
 
 
-def encoding_seq_np(seq):
-    arr = numpy.zeros((1, CHARLEN * 1000), dtype=numpy.float32)
-    for i, c in enumerate(seq):
-        if i == 1000:
-            continue
-        if c == '\n':
-            continue
-        if c == "_":
-            # let them zero
-            continue
-        elif isinstance(CHARSET[c], int):
-            idx = CHARLEN * i + CHARSET[c]
-            arr[0][idx] = 1
-        else:
-            idx1 = CHARLEN * i + CHARSET[c][0]
-            idx2 = CHARLEN * i + CHARSET[c][1]
-            arr[0][idx1] = 0.5
-            arr[0][idx2] = 0.5
-            # raise Exception("notreachhere")
-    return arr
+img_x, img_y = 1, num_features
 
 
-def get_Data():
-    X = []
-    Y = []
+def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
+    hmaps = []
+    with tf.Session() as sess:
+        with DeepExplain(session=sess, graph=sess.graph) as de:
+            new_saver = tf.train.import_meta_graph(ckptdir + '.meta')
+            new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
 
-    print("data File:", dataFile)
+            weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CNN')
+            opera = tf.get_collection('DTD_T')
+            prediction = opera[0]
+            logits = opera[1]
+            y_placeholder_new = opera[2]
 
-    for index, line in enumerate(open(dataFile, 'r').readlines()):
-        w = line.split('\t')
-        label = w[0]
-        features = w[1]
-        # if index ==99999:
-        #     print("haha")
-        # print("data line:", index)
+            activations = tf.get_collection('DTD')
+            x_placeholder_new = activations[0]
 
-        try:
-            label = [int(x) for x in label]
-            features = encoding_seq_np(features)
-        except ValueError:
-            print('Line %s is corrupt!' % index)
-            break
+            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y_placeholder_new)
+                                  )
 
-        X.append(features)
-        Y.extend(label)
+            correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(y_placeholder_new, 1))
+            train_accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-    X = numpy.asarray(X)
-    Y = numpy.asarray(Y)
+            with DeepExplain(session=sess) as de:
+                attributions = {
+                    # Gradient-based
+                    # NOTE: reduce_max is used to select the output unit for the class predicted by the classifier
+                    # For an example of how to use the ground-truth labels instead, see mnist_cnn_keras notebook
+                    'Saliency maps': de.explain('saliency', logits, x_placeholder_new, sample_imgs),
+                    'Gradient * Input': de.explain('grad*input', logits, x_placeholder_new, sample_imgs),
+                    'Integrated Gradients': de.explain('intgrad', logits, x_placeholder_new, sample_imgs),
+                    'Epsilon-LRP': de.explain('elrp', logits, x_placeholder_new, sample_imgs),
+                    'DeepLIFT (Rescale)': de.explain('deeplift', logits, x_placeholder_new, sample_imgs),
+                    # Perturbation-based (comment out to evaluate, but this will take a while!)
+                    # 'Occlusion [15x15]':    de.explain('occlusion', tf.reduce_max(logits, 1), X, xs, window_shape=(15,15,3), step=4)
+                }
+                print("Done!")
 
-    print("feature shape:", X.shape)
-    print("label shape:", Y.shape)
-
-    return X, Y
-
-
-X, Y = get_Data()
-
-X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.33, random_state=42)
-
-x_train = X_train
-x_train = numpy.reshape(x_train, (len(x_train), 1, 21000, 1))
-ky_train = y_train
-
-x_test = X_test
-x_test = numpy.reshape(x_test, (len(x_test), 1, 21000, 1))
-
-print("training data count:", len(x_train))
-
-x_train = x_train.astype('float32')
-x_test = x_test.astype('float32')
-
-y_train = keras.utils.to_categorical(ky_train, num_classes)
-y_test = keras.utils.to_categorical(y_test, num_classes)
-
-img_x, img_y = 1, 21000
-
-input_shape = (img_x, img_y, 1)
-
-model = Sequential()
-model.add(Conv2D(128, kernel_size=3, strides=(1, 1), padding='same',
-                 activation='relu',
-                 input_shape=input_shape))
-model.add(MaxPooling2D(pool_size=(1, 1), strides=(1, 1)))
-
-model.add(Conv2D(128, (3, 3), padding='same', activation='relu'))
-model.add(MaxPooling2D(pool_size=(1, 1)))
-
-model.add(Flatten())
-model.add(Dense(256, activation='relu'))
-model.add(Dense(num_classes))
-model.add(Activation('softmax'))
-model.summary()
-
-model.compile(loss=keras.losses.categorical_crossentropy,
-              optimizer=keras.optimizers.Adam(),
-              metrics=['accuracy'])
+    return attributions
 
 
-class AccuracyHistory(keras.callbacks.Callback):
-    def on_train_begin(self, logs={}): self.acc = []
+def cur_script_name():
+    argv0_list = sys.argv[0].split("/")
+    script_name = argv0_list[len(argv0_list) - 1]  # get script file name self
+    #print("current script:", script_name)
+    script_name = script_name[0:-3]  # remove ".py"
 
-    def on_epoch_end(self, batch, logs={}): self.acc.append(logs.get('acc'))
+    return script_name
+
+hmaps = []
+
+from alignedSeqUtil import get_seqs
+
+fast_file = "../data/Q97V95_SULSO.txt"
+# fast_file = "/home/myc/projectpy/cnnTensorflowNew/data/Q8EHI4_SHEON_5-69.txt"
+# fast_file = "../data/Q6M020_METMP_269-320"
+name = "Q97V95_SULSO"
+aligned_seqs = get_seqs("/data1/projectpy/cnnTensorflow/data/PF00571_seed.txt", name)
+
+dataset = ProteinDataSet(fpath=fast_file,
+                         seqlen=1000,
+                         n_classes=2,
+                         need_shuffle=False)
+# ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540842612_fold_0/_model"
+# logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540842612_fold_0"
+
+# ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540876682_fold_0/_model"
+# logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540876682_fold_0"
+
+# ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0/_model"
+# logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0"
+# ckptdir = "./log/log_1541687626_fold_0/_model"
+# logdir = "./log/log_1541687626_fold_0"
+ckptdir = "../taylorDecomposition/log/log_1542223750_fold_0/_model"
+logdir = "../taylorDecomposition/log/log_1542223750_fold_0"
+data, labels, seq = dataset.next_sample_random(with_raw=True)
+
+rawseq = seq[0][1]
+with open("../result/"+cur_script_name() + "_" + name + "_seq.txt", 'w') as f:
+    # rawseq = seq[0][1].replace("_", "")
+    f.write("%s\n" % rawseq)
+    for item in list(rawseq):
+        f.write("%s\n" % item)
+
+hmaps = run_deep_explain(logdir, ckptdir, data, labels)
+
+for key in hmaps:
+    nhmaps3 = numpy.reshape(hmaps[key][0], (1000, 21)).mean(axis=1)
+    for seqobj in aligned_seqs:
+        start = seqobj.start
+        end = seqobj.end
+        seq = seqobj.seq
+        location = seqobj.location
+
+        relevance_score = numpy.zeros(len(seq))
+
+        index = 0
+        raw_index = 0
+        for i, c in enumerate(seq):
+            if c != '.':
+                index = raw_index + start - 1
+                raw_c = rawseq[index]
+
+                if raw_c != c:
+                    raise Exception("index is wrong")
+
+                score = nhmaps3[index] * 1000
+
+                relevance_score[i] = score
+
+                raw_index = raw_index + 1
+
+        with open("../result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_seq.txt", 'w') as f:
+            #        f.write("%s\n\n\n" % seqobj.location)
+            for item in list(seq):
+                f.write("%s\n" % item)
+        with open("../result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_score.txt", 'w') as f:
+            #        f.write("%s\n\n\n" % seqobj.location)
+            for item in list(relevance_score):
+                f.write("%s\n" % item)
+    print("relevance scores %s: " % key)
+    print(nhmaps3.argsort()[-5:][::-1])
+    print(nhmaps3[nhmaps3.argsort()[-5:][::-1]])
 
 
-history = AccuracyHistory()
-
-train_data = Dataset(x_train, y_train)
-
-for epoch in range(epochs):
-    total_batch = int(train_data._num_examples / batch_size)
-    avg_cost = 0
-    avg_acc = 0
-
-    for i in range(total_batch):
-        batch_x, batch_y = train_data.next_batch(batch_size)
-
-        model.fit(batch_x, batch_y,
-                  batch_size=batch_size,
-                  epochs=epochs,
-                  verbose=2,
-                  validation_split=0.2,
-                  shuffle=True,
-                  callbacks=[history])
-
-score = model.evaluate(x_test, verbose=0, batch_size=batch_size)
-
-print('Test loss:', score[0])
-print('Test accuracy:', score[1])
-
-with DeepExplain(session=K.get_session()) as de:  # <-- init DeepExplain context
-    # Need to reconstruct the graph in DeepExplain context, using the same weights.
-    # With Keras this is very easy:
-    # 1. Get the input tensor to the original model
-    input_tensor = model.layers[0].input
-
-    # 2. We now target the output of the last dense layer (pre-softmax)
-    # To do so, create a new model sharing the same layers untill the last dense (index -2)
-    fModel = model(inputs=input_tensor, outputs=model.layers[-2].output)
-    target_tensor = fModel(input_tensor)
-
-    xs = x_test[0:10]
-    ys = y_test[0:10]
-
-    attributions = de.explain('grad*input', target_tensor * ys, input_tensor, xs)
-    # attributions = de.explain('saliency', target_tensor * ys, input_tensor, xs)
-    # attributions = de.explain('intgrad', target_tensor * ys, input_tensor, xs)
-    # attributions = de.explain('deeplift', target_tensor * ys, input_tensor, xs)
-    # attributions = de.explain('elrp', target_tensor * ys, input_tensor, xs)
-    # attributions = de.explain('occlusion', target_tensor * ys, input_tensor, xs)
-
-    # Plot attributions
-    from utils import plot, plt
-
-    n_cols = 4
-    n_rows = int(len(attributions) / 2)
-    fig, axes = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(3 * n_cols, 3 * n_rows))
-
-    for i, a in enumerate(attributions):
-        row, col = divmod(i, 2)
-        plot(xs[i].reshape(28, 28), cmap='Greys', axis=axes[row, col * 2]).set_title('Original')
-        plot(a.reshape(28, 28), xi=xs[i], axis=axes[row, col * 2 + 1]).set_title('Attributions')
-    plt.show()
+total_end_time = datetime.now()
+print("/n/n total duration : {}".format(total_end_time, total_start_time))
