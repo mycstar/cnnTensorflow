@@ -12,6 +12,7 @@ def plot(data, xi=None, cmap='RdBu_r', axis=plt, percentile=100, dilation=3.0, a
     cmap_xi = plt.get_cmap('Greys_r')
     cmap_xi.set_bad(alpha=0)
     overlay = None
+
     if xi is not None:
         # Compute edges (to overlay to heatmaps later)
         xi_greyscale = xi if len(xi.shape) == 2 else np.mean(xi, axis=-1)
@@ -30,6 +31,7 @@ def plot(data, xi=None, cmap='RdBu_r', axis=plt, percentile=100, dilation=3.0, a
     if len(data.shape) == 3:
         data = np.mean(data, 2)
     axis.imshow(data, extent=extent, interpolation='none', cmap=cmap, vmin=-abs_min, vmax=abs_max)
+
     if overlay is not None:
         axis.imshow(overlay, extent=extent, interpolation='none', cmap=cmap_xi, alpha=alpha)
     axis.axis('off')

@@ -33,6 +33,7 @@ num_classes = 2
 num_features = 21000
 epochs = 5
 
+
 dataFile = "/data1/projectpy/DeepFam/data/COG-500-1074/90percent/data388to1_withanother.txt"
 
 CHARSET = {'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, \
