@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 from proteindataset import ProteinDataSet
+from alignedSeqUtil import get_seqs
+
 from deepexplain.tensorflow import DeepExplain
 
 total_start_time = datetime.now()
@@ -81,7 +83,6 @@ def cur_script_name():
 
 hmaps = []
 
-from alignedSeqUtil import get_seqs
 
 fast_file = "../data/Q97V95_SULSO.txt"
 # fast_file = "/home/myc/projectpy/cnnTensorflowNew/data/Q8EHI4_SHEON_5-69.txt"
