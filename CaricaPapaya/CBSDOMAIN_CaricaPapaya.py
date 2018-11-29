@@ -73,7 +73,7 @@ def encoding_seq_np(seq):
 def get_Data():
     X = []
     Y = []
-    dataFile = "/data1/projectpy/cnnTensorflow/data/CaricaPapaya/random1500_b_label_0_500.txt"
+    dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/caricapapaya_limit_5_500.txt"
     print("data File:", dataFile)
 
     for index, line in enumerate(open(dataFile, 'r').readlines()):
