@@ -114,8 +114,8 @@ dataset = ProteinDataSet(fpath=fast_file,
 # logdir = "../taylorDecomposition/log/log_1542223750_fold_0"
 # ckptdir = "/home/myc/projectpy/DeepFam/checkpoint/module.ckpt"
 # logdir = "/home/myc/projectpy/DeepFam/checkpoint/"
-ckptdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/log_1543854085_fold_4/module.ckpt"
-logdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/log_1543854085_fold_4/"
+ckptdir = "./log/log_1543854085_fold_4/module.ckpt"
+logdir = "./log/log_1543854085_fold_4/"
 
 data, labels, seq = dataset.next_sample_random(with_raw=True)
 
@@ -131,7 +131,9 @@ hmaps = run_deep_explain(logdir, ckptdir, data, labels)
 
 for key in hmaps:
     nhmaps3 = numpy.reshape(hmaps[key][0], (1000, 21)).mean(axis=1)
-    for seqobj in aligned_seqs:
+    fig = plt.figure(figsize=(20, 2.5 * len(aligned_seqs)))
+
+    for seq_index, seqobj in enumerate(aligned_seqs):
         start = seqobj.start
         end = seqobj.end
         seq = seqobj.seq
@@ -156,14 +158,23 @@ for key in hmaps:
 
                 raw_index = raw_index + 1
 
-        with open("../result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_seq.txt", 'w') as f:
-            #        f.write("%s\n\n\n" % seqobj.location)
-            for item in list(seq):
-                f.write("%s\n" % item)
-        with open("../result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_score.txt", 'w') as f:
-            #        f.write("%s\n\n\n" % seqobj.location)
-            for item in list(relevance_score):
-                f.write("%s\n" % item)
+        # with open("../result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_seq.txt", 'w') as f:
+        #     #        f.write("%s\n\n\n" % seqobj.location)
+        #     for item in list(seq):
+        #         f.write("%s\n" % item)
+        # with open("../result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_score.txt", 'w') as f:
+        #     #        f.write("%s\n\n\n" % seqobj.location)
+        #     for item in list(relevance_score):
+        #         f.write("%s\n" % item)
+
+        fig1 = fig.add_subplot(len(aligned_seqs), 1, seq_index + 1)
+        fig1.set_xlim(0)
+        fig1.set_ylim(0, numpy.amax(nhmaps3))
+        # fig1.set(figsize=(20, 2))
+        fig1.set_title(location)
+        fig1.axhline(0, color='black')
+        fig1.bar(list(range(len(seq))), relevance_score.tolist(), color='rgb', tick_label=seq, align='center')
+
     print("relevance scores %s: " % key)
     print(nhmaps3.argsort()[-5:][::-1])
     print(nhmaps3[nhmaps3.argsort()[-5:][::-1]])
