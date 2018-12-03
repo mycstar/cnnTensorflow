@@ -38,12 +38,12 @@ def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
     hmaps = []
     with tf.Session() as sess:
         with DeepExplain(session=sess, graph=sess.graph) as de:
-            ckpt = tf.train.latest_checkpoint(os.path.dirname(ckptdir))
+            ckpt = tf.train.latest_checkpoint(ckptdir)
 
             new_saver = tf.train.import_meta_graph(ckpt + '.meta')
             new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
 
-            #weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CNN')
+            # weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CNN')
             opera = tf.get_collection('DTD_T')
             logits = opera[1]
             opera = tf.get_collection('DTD')
@@ -67,7 +67,7 @@ def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
                     # NOTE: reduce_max is used to select the output unit for the class predicted by the classifier
                     # For an example of how to use the ground-truth labels instead, see mnist_cnn_keras notebook
                     'Saliency maps': de.explain('saliency', logits, x_placeholder_new, sample_imgs),
-                    'Gradient * Input': de.explain('grad*input', logits, x_placeholder_new, sample_imgs),
+                    'Gradient Input': de.explain('grad*input', logits, x_placeholder_new, sample_imgs),
                     'Integrated Gradients': de.explain('intgrad', logits, x_placeholder_new, sample_imgs),
                     'Epsilon-LRP': de.explain('elrp', logits, x_placeholder_new, sample_imgs),
                     'DeepLIFT (Rescale)': de.explain('deeplift', logits, x_placeholder_new, sample_imgs),
@@ -82,13 +82,13 @@ def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
 def cur_script_name():
     argv0_list = sys.argv[0].split("/")
     script_name = argv0_list[len(argv0_list) - 1]  # get script file name self
-    #print("current script:", script_name)
+    # print("current script:", script_name)
     script_name = script_name[0:-3]  # remove ".py"
 
     return script_name
 
-hmaps = []
 
+hmaps = []
 
 fast_file = "../data/CaricaPapaya/MER0000647.txt"
 # fast_file = "/home/myc/projectpy/cnnTensorflowNew/data/Q8EHI4_SHEON_5-69.txt"
@@ -114,24 +114,25 @@ dataset = ProteinDataSet(fpath=fast_file,
 # logdir = "../taylorDecomposition/log/log_1542223750_fold_0"
 # ckptdir = "/home/myc/projectpy/DeepFam/checkpoint/module.ckpt"
 # logdir = "/home/myc/projectpy/DeepFam/checkpoint/"
-ckptdir = "./log/log_1543854085_fold_4/module.ckpt"
+ckptdir = "./log/log_1543854085_fold_4/"
 logdir = "./log/log_1543854085_fold_4/"
 
 data, labels, seq = dataset.next_sample_random(with_raw=True)
 
 rawseq = seq[0][1]
-with open("../result/"+cur_script_name() + "_" + name + "_seq.txt", 'w') as f:
+with open(os.getcwd()+"/result/" + cur_script_name() + "_" + name + "_seq.txt", 'w') as f:
     # rawseq = seq[0][1].replace("_", "")
     f.write("%s\n" % rawseq)
     for item in list(rawseq):
         f.write("%s\n" % item)
-muber_one= numpy.sum(data)
+muber_one = numpy.sum(data)
 
 hmaps = run_deep_explain(logdir, ckptdir, data, labels)
 
 for key in hmaps:
-    nhmaps3 = numpy.reshape(hmaps[key][0], (1000, 21)).mean(axis=1)
-    fig = plt.figure(figsize=(20, 2.5 * len(aligned_seqs)))
+    nhmaps3 = numpy.reshape(hmaps[key][0], (1000, 21)).mean(axis=1) * 1000
+
+    fig = plt.figure(figsize=(300, 2.5 * len(aligned_seqs)))
 
     for seq_index, seqobj in enumerate(aligned_seqs):
         start = seqobj.start
@@ -152,20 +153,22 @@ for key in hmaps:
                     print("%s location is wrong,sequence is %s,but aligned is %s " % (index, raw_c, c))
                     raise Exception("index is wrong")
 
-                score = nhmaps3[index] * 1000
+                score = nhmaps3[index]
 
                 relevance_score[i] = score
 
                 raw_index = raw_index + 1
 
-        # with open("../result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_seq.txt", 'w') as f:
-        #     #        f.write("%s\n\n\n" % seqobj.location)
-        #     for item in list(seq):
-        #         f.write("%s\n" % item)
-        # with open("../result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_score.txt", 'w') as f:
-        #     #        f.write("%s\n\n\n" % seqobj.location)
-        #     for item in list(relevance_score):
-        #         f.write("%s\n" % item)
+        with open(os.getcwd()+"/result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_seq.txt", 'w') as f:
+            #        f.write("%s\n\n\n" % seqobj.location)
+            for item in list(seq):
+                f.write("%s\n" % item)
+        with open(os.getcwd()+"/result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_score.txt", 'w') as f:
+            #        f.write("%s\n\n\n" % seqobj.location)
+            for item in list(relevance_score):
+                f.write("%s\n" % item)
+
+        numpy.savetxt(os.getcwd()+"/result/"+cur_script_name() + "_" + name + "_" + key + "_" + location  + "_hmaps.txt", nhmaps3 , fmt="%5.5f")
 
         fig1 = fig.add_subplot(len(aligned_seqs), 1, seq_index + 1)
         fig1.set_xlim(0)
@@ -173,6 +176,7 @@ for key in hmaps:
         # fig1.set(figsize=(20, 2))
         fig1.set_title(location)
         fig1.axhline(0, color='black')
+
         fig1.bar(list(range(len(seq))), relevance_score.tolist(), color='rgb', tick_label=seq, align='center')
 
     print("relevance scores %s: " % key)
@@ -180,9 +184,8 @@ for key in hmaps:
     print(nhmaps3[nhmaps3.argsort()[-5:][::-1]])
 
     plt.tight_layout()
-    plt.savefig(name + "_" + key + ".png")
+    plt.savefig(os.getcwd()+"/result/"+cur_script_name() + "_" + name + "_" + key + ".png")
     plt.close()
-
 
 total_end_time = datetime.now()
 print("/n/n total duration : {}".format(total_end_time, total_start_time))
