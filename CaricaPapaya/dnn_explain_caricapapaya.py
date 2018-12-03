@@ -44,14 +44,17 @@ def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
             new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
 
             #weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CNN')
+            opera = tf.get_collection('DTD_T')
+            logits = opera[1]
             opera = tf.get_collection('DTD')
-            logits = opera[0]
-            x_placeholder_new = opera[1]
+            x_placeholder_new = opera[0]
             # y_placeholder_new = opera[2]
             #
             # activations = tf.get_collection('DTD')
             # x_placeholder_new = activations[0]
             #
+            model_summary()
+
             # cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y_placeholder_new)
             #                       )
             #
@@ -109,8 +112,11 @@ dataset = ProteinDataSet(fpath=fast_file,
 # logdir = "./log/log_1541687626_fold_0"
 # ckptdir = "../taylorDecomposition/log/log_1542223750_fold_0/_model"
 # logdir = "../taylorDecomposition/log/log_1542223750_fold_0"
-ckptdir = "/home/myc/projectpy/DeepFam/checkpoint/module.ckpt"
-logdir = "/home/myc/projectpy/DeepFam/checkpoint/"
+# ckptdir = "/home/myc/projectpy/DeepFam/checkpoint/module.ckpt"
+# logdir = "/home/myc/projectpy/DeepFam/checkpoint/"
+ckptdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/log_1543854085_fold_4/module.ckpt"
+logdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/log_1543854085_fold_4/"
+
 data, labels, seq = dataset.next_sample_random(with_raw=True)
 
 rawseq = seq[0][1]
@@ -119,6 +125,7 @@ with open("../result/"+cur_script_name() + "_" + name + "_seq.txt", 'w') as f:
     f.write("%s\n" % rawseq)
     for item in list(rawseq):
         f.write("%s\n" % item)
+muber_one= numpy.sum(data)
 
 hmaps = run_deep_explain(logdir, ckptdir, data, labels)
 
