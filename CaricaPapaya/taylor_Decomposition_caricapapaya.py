@@ -1,19 +1,9 @@
 from __future__ import print_function
 import sys
 import os
-import time
-
-import keras
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-
-from sklearn.metrics import classification_report, roc_auc_score, roc_curve, make_scorer, confusion_matrix
-from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import auc, precision_recall_curve
-
 import numpy
-from numpy import argmax
-from scipy import interp
 import matplotlib
 
 matplotlib.use('Agg')
@@ -21,17 +11,16 @@ import matplotlib.pyplot as plt
 
 from datetime import datetime
 
-from batchDataset import Dataset
-
-from models_2_4_1 import MNIST_CNN, Taylor
-from dataset import DataSet
+from models_2_4_caricapapaya import MNIST_CNN, Taylor
+from proteindataset import ProteinDataSet
+from alignedSeqUtil import get_seqs
 
 ## output roc plot according to cross-validation,
 
 total_start_time = datetime.now()
 
 batch_size = 100
-num_classes = 1074
+num_classes = 2
 num_features = 21000
 collection_name = "sensitivity_analysis"
 split_size = 3
@@ -113,14 +102,16 @@ def run_sensitivity_analysis(checkpoint_infos, class_num, feature_num, collectio
 def run_deep_taylor_decomposition(logdir, ckptdir, sample_imgs, label_imgs):
     hmaps = []
     with tf.Session() as sess:
-        new_saver = tf.train.import_meta_graph(ckptdir + '.meta')
+        ckpt = tf.train.latest_checkpoint(os.path.dirname(ckptdir))
+
+        new_saver = tf.train.import_meta_graph(ckpt + '.meta')
         new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
 
         weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CNN')
         activations = tf.get_collection('DTD')
         x_placeholder_new = activations[0]
 
-        conv_ksize = [1, 3, 3, 1]
+        conv_ksize = [1, 9, 9, 1]
         pool_ksize = [1, 2, 2, 1]
         conv_strides = [1, 1, 1, 1]
         pool_strides = [1, 2, 2, 1]
@@ -177,22 +168,27 @@ def read_fasta(fasta_file, maxlen, familynumber):
 
 hmaps = []
 
+fast_file = "../data/CaricaPapaya/MER0000647.txt"
+# fast_file = "/home/myc/projectpy/cnnTensorflowNew/data/Q8EHI4_SHEON_5-69.txt"
+# fast_file = "../data/Q6M020_METMP_269-320"
+name = "MER0000647"
+aligned_seqs = get_seqs("../data/CaricaPapaya/MER0000647_aligned.txt", name)
 
-train_file = "/home/myc/projectpy/DeepFam/data/COG-500-1074/90percent//data_388.txt"
-#fast_file = "/home/myc/projectpy/cnnTensorflowNew/data/Q8EHI4_SHEON.txt"
-fast_file = "/home/myc/projectpy/cnnTensorflowNew/data/ps51371.txt"
-dataset = DataSet(fpath=fast_file,
-                  seqlen=1000,
-                  n_classes=1074,
-                  need_shuffle=False)
-#ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540842612_fold_0/_model"
-#logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540842612_fold_0"
+dataset = ProteinDataSet(fpath=fast_file,
+                         seqlen=1000,
+                         n_classes=2,
+                         need_shuffle=False)
+# ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540842612_fold_0/_model"
+# logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540842612_fold_0"
 
 # ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540876682_fold_0/_model"
 # logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1540876682_fold_0"
 
-ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0/_model"
-logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0"
+# ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0/_model"
+# logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0"
+
+ckptdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/module.ckpt"
+logdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/"
 
 data, labels, seq = dataset.next_sample_random(with_raw=True)
 
@@ -207,8 +203,9 @@ numpy.savetxt(cur_script_name() + "hmaps.txt", nhmaps3 * 1000, fmt="%5.5f")
 # f = open(cur_script_name() + "seq.txt", 'w')
 # f.writelines(["%s\n" % item for item in list(seq)])
 
-with open(cur_script_name() + "seq.txt", 'w') as f:
-    rawseq = seq[0][1].replace("_","")
+with open(cur_script_name() + "_seq.txt", 'w') as f:
+    #rawseq = seq[0][1].replace("_", "")
+    rawseq = seq[0][1]
     f.write("%s\n" % rawseq)
     for item in list(rawseq):
         f.write("%s\n" % item)
