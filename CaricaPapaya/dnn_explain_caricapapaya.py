@@ -179,6 +179,10 @@ for key in hmaps:
     print(nhmaps3.argsort()[-5:][::-1])
     print(nhmaps3[nhmaps3.argsort()[-5:][::-1]])
 
+    plt.tight_layout()
+    plt.savefig(name + "_" + key + ".png")
+    plt.close()
+
 
 total_end_time = datetime.now()
 print("/n/n total duration : {}".format(total_end_time, total_start_time))
