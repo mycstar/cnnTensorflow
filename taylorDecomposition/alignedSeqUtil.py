@@ -11,11 +11,11 @@ from alignedSeq import alignedSeq
 #
 # print(seq_record.id)
 #
-def get_aligned_seqs(fastaFile, name):
+def get_aligned_seqs(fastaFile="../data/PF00571_seed.txt"):
     seq_length = 0
     raw_dict = {}
     motifs = []
-    seq_list = list(SeqIO.parse("/data1/projectpy/cnnTensorflow/data/PF00571_seed.txt", "fasta"))
+    seq_list = list(SeqIO.parse(fastaFile, "fasta"))
     for seq_record in seq_list:
         id = seq_record.id
         name_id, locations = id.split("/")
@@ -33,7 +33,7 @@ def get_aligned_seqs(fastaFile, name):
 
 
 def get_seqs(fastaFile, name):
-    aligned_seqs = get_aligned_seqs("d","d")
+    aligned_seqs = get_aligned_seqs(fastaFile)
     seqs = aligned_seqs[name]
     return seqs
 
