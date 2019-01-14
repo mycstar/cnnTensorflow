@@ -45,7 +45,7 @@ seq_len = 1000
 num_features_per = 21
 collection_name = "sensitivity_analysis"
 split_size = 5
-epochs = 15
+epochs = 5
 
 CHARSET = {'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, \
            'I': 7, 'K': 8, 'L': 9, 'M': 10, 'N': 11, 'P': 12, 'Q': 13, \
@@ -459,9 +459,9 @@ def cross_validate(X_0, Y_0, groupData, epochs, class_num, feature_num, collecti
         y_train = numpy.append(ky_train_0, ky_train_1, axis=0)
 
         #ros = RandomOverSampler(random_state=6548)
-        ros = SMOTEENN(ratio='auto', n_jobs=6)
+        #ros = SMOTEENN(ratio='auto', n_jobs=6)
 
-        x_train, y_train = ros.fit_sample(x_train, y_train)
+        #x_train, y_train = ros.fit_sample(x_train, y_train)
 
         x_train, y_train = shuffle_list(x_train, y_train)
 

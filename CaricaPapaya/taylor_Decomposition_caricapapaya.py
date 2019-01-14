@@ -111,7 +111,7 @@ def run_deep_taylor_decomposition(logdir, ckptdir, sample_imgs, label_imgs):
         activations = tf.get_collection('DTD')
         x_placeholder_new = activations[0]
 
-        conv_ksize = [1, 9, 9, 1]
+        conv_ksize = [1, 5, 5, 1]
         pool_ksize = [1, 2, 2, 1]
         conv_strides = [1, 1, 1, 1]
         pool_strides = [1, 2, 2, 1]
@@ -187,8 +187,11 @@ dataset = ProteinDataSet(fpath=fast_file,
 # ckptdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0/_model"
 # logdir = "/home/myc/projectpy/cnnTensorflowNew/taylorDecomposition/log/log_1541007951_fold_0"
 
-ckptdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/module.ckpt"
-logdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/"
+#ckptdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/module.ckpt"
+#logdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/"
+
+ckptdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/log_1544202458_fold_4/"
+logdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/log_1544202458_fold_4"
 
 data, labels, seq = dataset.next_sample_random(with_raw=True)
 
@@ -200,6 +203,11 @@ numpy.save(cur_script_name() + "hmaps", nhmaps)
 nhmaps2 = numpy.reshape(nhmaps, (1000, 21))
 nhmaps3 = nhmaps2.sum(axis=1)
 numpy.savetxt(cur_script_name() + "hmaps.txt", nhmaps3 * 1000, fmt="%5.5f")
+nhmaps4 = nhmaps3 * 1000
+with open(os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_taylor.txt", 'w') as f:
+    for item in list(nhmaps4):
+        f.write("%s\n" % item)
+
 # f = open(cur_script_name() + "seq.txt", 'w')
 # f.writelines(["%s\n" % item for item in list(seq)])
 
@@ -214,8 +222,8 @@ print(seq)
 # print(labels)
 print(nhmaps3)
 
-print(nhmaps3.argsort()[-5:][::-1])
-print(nhmaps3[nhmaps3.argsort()[-5:][::-1]])
+print(nhmaps3.argsort()[-30:][::-1])
+print(nhmaps3[nhmaps3.argsort()[-30:][::-1]])
 print("relevance scores: ", nhmaps)
 print("relevance scores: ", hmaps)
 

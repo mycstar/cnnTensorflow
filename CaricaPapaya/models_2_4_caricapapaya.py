@@ -17,26 +17,30 @@ class MNIST_CNN:
 
             # Convolutional Layer #1 and Pooling Layer #1
             with tf.variable_scope('layer1'):
-                conv1 = tf.layers.conv2d(inputs=X_img, filters=128, kernel_size=[3, 3], padding="SAME",
+                conv1 = tf.layers.conv2d(inputs=X_img, filters=128, kernel_size=5, padding="SAME",
                                          activation=tf.nn.relu, use_bias=False)
                 pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], padding="SAME", strides=2)
 
+                drop1 = tf.layers.dropout(inputs=pool1, rate = 0.25)
+
             # Convolutional Layer #2 and Pooling Layer #2
             with tf.variable_scope('layer2'):
-                conv2 = tf.layers.conv2d(inputs=pool1, filters=128, kernel_size=[3, 3], padding="SAME",
+                conv2 = tf.layers.conv2d(inputs=drop1, filters=128, kernel_size=5, padding="SAME",
                                          activation=tf.nn.relu, use_bias=False)
                 pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], padding="SAME", strides=2)
 
+                drop2 = tf.layers.dropout(inputs=pool2, rate=0.25)
+
             # Convolutional Layer #3 and Pooling Layer #3
             with tf.variable_scope('layer3'):
-                conv3 = tf.layers.conv2d(inputs=pool2, filters=128, kernel_size=[3, 3], padding="SAME",
+                conv3 = tf.layers.conv2d(inputs=drop2, filters=128, kernel_size=5, padding="SAME",
                                          activation=tf.nn.relu, use_bias=False)
                 pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[2, 2], padding="SAME", strides=2)
 
             # Dense Layer with Relu
             with tf.variable_scope('layer4'):
                 flat = tf.keras.layers.Flatten()(pool3)
-                dense4 = tf.layers.dense(inputs=flat, units=256, activation=tf.nn.relu, use_bias=False)
+                dense4 = tf.layers.dense(inputs=flat, units=512, activation=tf.nn.relu, use_bias=False)
 
             # Logits (no activation) Layer: L5 Final FC 625 inputs -> 10 outputs
             with tf.variable_scope('layer5'):
@@ -133,12 +137,12 @@ class Taylor:
         if pooling_type.lower() in 'avg':
             z = nn_ops.avg_pool(activation, ksize, strides, padding) + 1e-10
             s = relevance / z
-            c = gen_nn_ops.avg_pool_grad(tf.shape(activation), s, ksize, strides, padding)
+            c = gen_nn_ops._avg_pool_grad(tf.shape(activation), s, ksize, strides, padding)
             return activation * c
         else:
             z = nn_ops.max_pool(activation, ksize, strides, padding) + 1e-10
             s = relevance / z
-            c = gen_nn_ops.max_pool_grad(activation, z, s, ksize, strides, padding)
+            c = gen_nn_ops._max_pool_grad(activation, z, s, ksize, strides, padding)
             return activation * c
 
     def backprop_dense(self, activation, kernel, relevance):

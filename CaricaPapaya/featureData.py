@@ -22,7 +22,7 @@ def cur_script_name():
 def get_data():
     featureSeq = {}
 
-    with open("/data1/projectpy/cnnTensorflow/data/CaricaPapaya/CA_group_features_limit_5_union_level_family.fa.csv",
+    with open("/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/CA_group_features_limit_5_union_level_family.fa.csv",
               'r') as infile:
         i = 0
         name = ''
