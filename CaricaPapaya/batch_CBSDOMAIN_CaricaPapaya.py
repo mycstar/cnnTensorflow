@@ -390,7 +390,6 @@ def cross_validate(X_0, Y_0, X_1, Y_1, Z_1, epochs, class_num, feature_num, coll
         checkpoint.append(logdir)
         checkpoint.append(ckptdir)
 
-
         x_train = numpy.vstack((x_train_0, x_train_1))
         y_train = numpy.append(ky_train_0, ky_train_1, axis=0)
 

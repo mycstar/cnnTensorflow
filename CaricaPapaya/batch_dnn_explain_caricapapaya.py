@@ -13,6 +13,7 @@ from datetime import datetime
 
 from deepexplain.tensorflow import DeepExplain
 from featureData import get_data
+from models_2_4_caricapapaya import MNIST_CNN, Taylor
 
 total_start_time = datetime.now()
 
@@ -105,7 +106,6 @@ img_x, img_y = 1, num_features
 
 
 def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
-
     with tf.Session() as sess:
         with DeepExplain(session=sess, graph=sess.graph) as de:
             ckpt = tf.train.latest_checkpoint(ckptdir)
@@ -113,10 +113,11 @@ def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
             new_saver = tf.train.import_meta_graph(ckpt + '.meta')
             new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
 
+            weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CNN')
             opera = tf.get_collection('DTD_T')
             logits = opera[1]
-            opera = tf.get_collection('DTD')
-            x_placeholder_new = opera[0]
+            activations = tf.get_collection('DTD')
+            x_placeholder_new = activations[0]
 
             model_summary()
 
@@ -133,10 +134,55 @@ def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
                     # Perturbation-based (comment out to evaluate, but this will take a while!)
                     # 'Occlusion [15x15]':    de.explain('occlusion', tf.reduce_max(logits, 1), X, xs, window_shape=(15,15,3), step=4)
                 }
-                print("Done!")
+                print("DeepExplain Done!")
+
+            conv_ksize = [1, 5, 5, 1]
+            pool_ksize = [1, 2, 2, 1]
+            conv_strides = [1, 1, 1, 1]
+            pool_strides = [1, 2, 2, 1]
+
+            weights.reverse()
+            activations.reverse()
+
+            taylor = Taylor(activations, weights, conv_ksize, pool_ksize, conv_strides, pool_strides, 'Taylor')
+            label_taylor = taylor(np.argmax(label_imgs))
+
+            res = sess.run(label_taylor, feed_dict={x_placeholder_new: sample_imgs})
+            attributions['deep taylor'] = res
 
     return attributions
 
+
+def run_deep_taylor_decomposition(logdir, ckptdir, sample_imgs, label_imgs):
+    hmaps = []
+    with tf.Session() as sess:
+        ckpt = tf.train.latest_checkpoint(os.path.dirname(ckptdir))
+
+        new_saver = tf.train.import_meta_graph(ckpt + '.meta')
+        new_saver.restore(sess, tf.train.latest_checkpoint(logdir))
+
+        weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CNN')
+        activations = tf.get_collection('DTD')
+        x_placeholder_new = activations[0]
+
+        conv_ksize = [1, 5, 5, 1]
+        pool_ksize = [1, 2, 2, 1]
+        conv_strides = [1, 1, 1, 1]
+        pool_strides = [1, 2, 2, 1]
+
+        weights.reverse()
+        activations.reverse()
+
+        taylor = Taylor(activations, weights, conv_ksize, pool_ksize, conv_strides, pool_strides, 'Taylor')
+
+        # Rs = []
+        # for i in range(num_classes):
+        #     Rs.append(taylor(i))
+        label_taylor = taylor(np.argmax(label_imgs))
+
+        hmaps.append(sess.run(label_taylor, feed_dict={x_placeholder_new: sample_imgs}))
+
+    return hmaps
 
 def cur_script_name():
     argv0_list = sys.argv[0].split("/")
@@ -166,22 +212,40 @@ for key in feature_datas.keys():
     feature_list.append((key, feature_datas.get(key)))
 
 num_data = len(feature_list)
-batch1 = feature_list[:5]
-batch2 = feature_list[5:10]
+batch1 = feature_list[:80]
 
 sample_datas1 = batch_sample(batch1)
 datas, labels, raws = parse_data_batch(sample_datas1, with_raw=True)
+
 hmaps_batch1 = run_deep_explain(logdir, ckptdir, datas, labels)
 
-sample_datas2 = batch_sample(batch2)
-datas, labels, raws = parse_data_batch(sample_datas2, with_raw=True)
-
-hmaps_batch2= run_deep_explain(logdir, ckptdir, datas, labels)
-
 for key in hmaps_batch1:
-    nhmaps3 = np.reshape(hmaps_batch1[key][0], (1000, 21)).mean(axis=1) * 1000
+    nhmaps3 = np.reshape(hmaps_batch1[key], (len(hmaps_batch1[key]), 1000, 21)).sum(axis=2) * 1000
+    nhmaps_sums = nhmaps3.sum(axis=1)
+    relevance_score_avg_list = []
+    activate_avg_list = []
 
+    for i, nhmaps_sum in enumerate(nhmaps_sums):
+        sample_name, sample_feature = feature_list[i]
+        sample_seq = sample_feature.getSeq()
+        seq_length = len(sample_seq)
+        relevance_score_avg = float(nhmaps_sum) / float(seq_length)
+        relevance_score_avg_list.append(relevance_score_avg)
 
+        sample_nhmaps = nhmaps3[i]
+        valid_sample_nhmaps = [item for item in nhmaps3[i] if item > 0]
+        activateSites = sample_feature.getActivateSites()
+        activateSites = [item - 1 for item in activateSites]
+        activate_scores = sample_nhmaps[activateSites]
+
+        activate_avg = np.mean(activate_scores)
+        activate_avg_list.append(activate_avg)
+
+    plt.plot(list(range(len(relevance_score_avg_list))), relevance_score_avg_list, color='red', label='avg relevance')
+    plt.plot(list(range(len(activate_avg_list))), activate_avg_list, color='blue', label='avg activate')
+    plt.tight_layout()
+    plt.savefig(os.getcwd() + "/result/" + cur_script_name() + "_" + key + ".png")
+    plt.close()
 
 total_end_time = datetime.now()
 print("/n/n total duration : {}".format(total_end_time, total_start_time))

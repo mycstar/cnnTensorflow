@@ -25,18 +25,21 @@ from batchDataset import Dataset
 
 from models_2_4_caricapapaya import MNIST_CNN, Taylor
 
+from imblearn.over_sampling import RandomOverSampler
+from imblearn.over_sampling import SMOTE, ADASYN
+
 ## output roc plot according to cross-validation,
 
 total_start_time = datetime.now()
 
-batch_size = 100
+batch_size = 50
 num_classes = 2
 num_features = 21000
 seq_len = 1000
 num_features_per = 21
 collection_name = "sensitivity_analysis"
 split_size = 5
-epochs = 20
+epochs = 10
 
 CHARSET = {'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, \
            'I': 7, 'K': 8, 'L': 9, 'M': 10, 'N': 11, 'P': 12, 'Q': 13, \
@@ -73,7 +76,7 @@ def encoding_seq_np(seq):
 def get_Data():
     X = []
     Y = []
-    dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/caricapapaya_limit_5_500.txt"
+    dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/caricapapaya_limit_5_1074.txt"
     print("data File:", dataFile)
 
     for index, line in enumerate(open(dataFile, 'r').readlines()):
@@ -82,7 +85,7 @@ def get_Data():
         features = w[1]
         # if index ==99999:
         #     print("haha")
-        # print("data line:", index)
+        #print("data line:", index)
 
         try:
             label = [int(x) for x in label]
@@ -95,6 +98,8 @@ def get_Data():
         Y.extend(label)
 
     X = numpy.asarray(X)
+    X = numpy.reshape(X, (len(X), 21000))
+
     Y = numpy.asarray(Y)
 
     print("feature shape:", X.shape)
@@ -401,7 +406,18 @@ hmaps = []
 
 X, Y = get_Data()
 
-results, checkpoints = cross_validate(X, Y, epochs, num_classes, num_features,
+ros = RandomOverSampler(random_state=0)
+
+X_resampled, y_resampled = ros.fit_sample(X, Y)
+
+from collections import Counter
+print(sorted(Counter(y_resampled).items()))
+
+print("before sample balance treatment:", sorted(Counter(Y).items()))
+print("after sample balance treatment :", sorted(Counter(y_resampled).items()))
+
+
+results, checkpoints = cross_validate(X_resampled, y_resampled, epochs, num_classes, num_features,
                                       collection_name, split_size)
 
 # print("Cross-validation test accuracy: %s" % results)
