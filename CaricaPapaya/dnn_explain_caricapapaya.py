@@ -88,6 +88,13 @@ def cur_script_name():
     return script_name
 
 
+def formatticks(x, pos):
+    if x == '.':
+        return pos
+    else:
+        return x
+
+
 hmaps = []
 
 fast_file = "../data/CaricaPapaya/MER0000647.txt"
@@ -114,13 +121,13 @@ dataset = ProteinDataSet(fpath=fast_file,
 # logdir = "../taylorDecomposition/log/log_1542223750_fold_0"
 # ckptdir = "/home/myc/projectpy/DeepFam/checkpoint/module.ckpt"
 # logdir = "/home/myc/projectpy/DeepFam/checkpoint/"
-ckptdir = "./log/log_1543854085_fold_4/"
-logdir = "./log/log_1543854085_fold_4/"
+ckptdir = "./log//log_1544202458_fold_4/"
+logdir = "./log/log_1544202458_fold_4/"
 
 data, labels, seq = dataset.next_sample_random(with_raw=True)
 
 rawseq = seq[0][1]
-with open(os.getcwd()+"/result/" + cur_script_name() + "_" + name + "_seq.txt", 'w') as f:
+with open(os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_seq.txt", 'w') as f:
     # rawseq = seq[0][1].replace("_", "")
     f.write("%s\n" % rawseq)
     for item in list(rawseq):
@@ -129,10 +136,33 @@ muber_one = numpy.sum(data)
 
 hmaps = run_deep_explain(logdir, ckptdir, data, labels)
 
-for key in hmaps:
-    nhmaps3 = numpy.reshape(hmaps[key][0], (1000, 21)).mean(axis=1) * 1000
 
-    fig = plt.figure(figsize=(300, 2.5 * len(aligned_seqs)))
+def plot_score(seq, scores):
+    scores = scores[0:len(seq)]
+    plt.figure(figsize=(30, numpy.amax((scores)) + 0.05))
+    plt.xlim(0)
+    plt.ylim(0, numpy.amax((scores)))
+    # fig1.set(figsize=(20, 2))
+    plt.axhline(0, color='black')
+    plt.tick_params(axis='x', rotation=90, labelsize=5)
+    # fig1.set_xticklabels(fontsize=8)
+
+    plt.bar(list(range(len(seq))), (scores),  tick_label=list(range(1, len(seq) + 1)), align='center')
+    for a, b in zip(list(range(len(seq))), (scores)):
+        if b > 0:
+            plt.text(a, b + 0.05, seq[a], ha='center', va='bottom', fontsize=6)
+
+    plt.tight_layout()
+    plt.savefig(os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_" + key + "_" + "raw.png")
+    plt.close()
+
+
+for key in hmaps:
+    raw_indexs=[]
+    nhmaps3 = numpy.reshape(hmaps[key][0], (1000, 21)).max(axis=1) * 1000
+    plot_score(rawseq, nhmaps3)
+
+    fig = plt.figure(figsize=(300, 2.5 * len(aligned_seqs)*3))
 
     for seq_index, seqobj in enumerate(aligned_seqs):
         start = seqobj.start
@@ -145,7 +175,7 @@ for key in hmaps:
         index = 0
         raw_index = 0
         for i, c in enumerate(seq):
-            if c != '.':
+            if c != '-':
                 index = raw_index + start - 1
                 raw_c = rawseq[index]
 
@@ -158,34 +188,67 @@ for key in hmaps:
                 relevance_score[i] = score
 
                 raw_index = raw_index + 1
+                raw_indexs.append(index+1)
+            else:
+                raw_indexs.append('.')
 
-        with open(os.getcwd()+"/result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_seq.txt", 'w') as f:
+        with open(os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_" + key + "_" + location + "_seq.txt",
+                  'w') as f:
             #        f.write("%s\n\n\n" % seqobj.location)
             for item in list(seq):
                 f.write("%s\n" % item)
-        with open(os.getcwd()+"/result/"+cur_script_name() + "_" + name + "_" + key + "_" + location + "_score.txt", 'w') as f:
+        with open(os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_" + key + "_" + location + "_score.txt",
+                  'w') as f:
             #        f.write("%s\n\n\n" % seqobj.location)
             for item in list(relevance_score):
                 f.write("%s\n" % item)
 
-        numpy.savetxt(os.getcwd()+"/result/"+cur_script_name() + "_" + name + "_" + key + "_" + location  + "_hmaps.txt", nhmaps3 , fmt="%5.5f")
+        numpy.savetxt(
+            os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_" + key + "_" + location + "_hmaps.txt",
+            nhmaps3, fmt="%5.5f")
 
-        fig1 = fig.add_subplot(len(aligned_seqs), 1, seq_index + 1)
+        # formatter = matplotlib.ticker.FuncFormatter(formatticks)
+        # locator = matplotlib.ticker.MaxNLocator(nbins=6)
+
+        fig1 = fig.add_subplot(2, 1, seq_index + 1)
         fig1.set_xlim(0)
         fig1.set_ylim(0, numpy.amax(nhmaps3))
         # fig1.set(figsize=(20, 2))
         fig1.set_title(location)
         fig1.axhline(0, color='black')
 
-        fig1.bar(list(range(len(seq))), relevance_score.tolist(), color='rgb', tick_label=seq, align='center')
+        # fig1.xaxis.set_major_formatter(formatter)
+        # fig1.xaxis.set_major_locator(locator)
+
+        fig1.bar(list(range(len(seq))), relevance_score.tolist(), tick_label=seq, align='center')
+
+        fig2 = fig.add_subplot(2, 1, 2)
+        fig2.tick_params(axis='x', rotation=90)
+        fig2.set_xlim(0)
+        fig2.set_ylim(0, numpy.amax(nhmaps3))
+        fig2.bar(list(range(len(seq))), relevance_score.tolist(), tick_label=raw_indexs, color='rgb')
+
+    seq_list = list(rawseq)
+    bigger_list = nhmaps3.argsort()[-30:][::-1]
+    bigger_scores = nhmaps3[bigger_list]
 
     print("relevance scores %s: " % key)
-    print(nhmaps3.argsort()[-5:][::-1])
-    print(nhmaps3[nhmaps3.argsort()[-5:][::-1]])
+
+    for i, item in enumerate(bigger_list):
+        if (i + 1) % 10 == 0:
+            print("%s:" % seq_list[item], end="")
+            print("%s," % str(item + 1), end="")
+            print("\n")
+        else:
+            print("%s:" % seq_list[item], end="")
+            print("%s," % str(item + 1), end="")
+
+    # print(nhmaps3.argsort()[-30:][::-1])
+    # print(nhmaps3[nhmaps3.argsort()[-30:][::-1]])
 
     plt.tight_layout()
-    plt.savefig(os.getcwd()+"/result/"+cur_script_name() + "_" + name + "_" + key + ".png")
+    plt.savefig(os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_" + key + ".png")
     plt.close()
 
 total_end_time = datetime.now()
-print("/n/n total duration : {}".format(total_end_time, total_start_time))
+print("\n total duration : {}".format(total_end_time, total_start_time))
