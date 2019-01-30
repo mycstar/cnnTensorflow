@@ -20,6 +20,7 @@ from keras.layers.core import Dense, Dropout, Activation
 from keras.layers.embeddings import Embedding
 from keras.layers.recurrent import LSTM, GRU, SimpleRNN
 from keras.layers.convolutional import Convolution1D, MaxPooling1D
+from keras.layers.normalization import BatchNormalization
 from keras.datasets import imdb
 
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, GroupKFold
@@ -64,7 +65,7 @@ def get_Data(dataFile):
     print("data File:", dataFile)
 
     for index, line in enumerate(open(dataFile, 'r').readlines()):
-        w = line.split(',')
+        w = line.split(' ')
         label = w[0]
         features = w[1]
         # if index ==99999:
@@ -300,7 +301,7 @@ lstm_output_size = 512
 
 # Training
 
-nb_epoch = 100
+nb_epoch = 40
 
 batch_size = 20
 num_classes = 2
@@ -323,7 +324,7 @@ CHARLEN = 21
 print('Loading data...')
 seed = 123456
 
-negative_dataFile = '/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/train_8000.txt'
+negative_dataFile = '/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/caricapapaya_label_0_1000.txt'
 positive_dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/CA_group_features_CA_25800.fa.csv"
 
 groupData = get_Data_group1(positive_dataFile)
@@ -372,10 +373,10 @@ for (fold, (train_0, test_0)), (train_1, test_1) in zip(enumerate(kfold.split(X_
     x_train = np.vstack((x_train_0, x_train_1))
     y_train = np.append(ky_train_0, ky_train_1, axis=0)
 
-    ros = RandomOverSampler(random_state=6548)
+    #ros = RandomOverSampler(random_state=6548)
     # ros = SMOTEENN(ratio='minority', n_jobs=6)
 
-    x_train, y_train = ros.fit_sample(x_train, y_train)
+    #x_train, y_train = ros.fit_sample(x_train, y_train)
 
     x_train, y_train = shuffle_list(x_train, y_train)
 
@@ -405,22 +406,27 @@ for (fold, (train_0, test_0)), (train_1, test_1) in zip(enumerate(kfold.split(X_
                             input_shape=(21000, 1),
                             padding='valid',
                             activation='relu'))
+    model.add(BatchNormalization())
     model.add(MaxPooling1D(pool_size=pool_length))
-
+    model.add(Dropout(0.2))
     model.add(Convolution1D(filters=nb_filter,
                             kernel_size=5,
                             padding='valid',
                             activation='relu'))
+    model.add(BatchNormalization())
     model.add(MaxPooling1D(pool_size=pool_length))
+    model.add(Dropout(0.2))
 
+    model.add(BatchNormalization())
     model.add(LSTM(lstm_output_size))
+    #model.add(SimpleRNN(128))
     model.add(Dense(2))
     model.add(Activation('softmax'))
     model.summary()
 
     model.compile(loss=keras.losses.categorical_crossentropy,
-                  # optimizer=keras.optimizers.Adam(),
-                  optimizer='rmsprop',
+                  optimizer=keras.optimizers.Adam(),
+                  #optimizer='rmsprop',
                   metrics=['accuracy', precision, recall, f1,
                            metrics.categorical_accuracy])
 
