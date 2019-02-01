@@ -190,8 +190,12 @@ dataset = ProteinDataSet(fpath=fast_file,
 #ckptdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/module.ckpt"
 #logdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/"
 
+# ckptdir = "./log/log_1543854085_fold_4/"
+# logdir = "./log/log_1543854085_fold_4/"
+
 ckptdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/log_1544202458_fold_4/"
 logdir = "/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/log_1544202458_fold_4"
+
 
 data, labels, seq = dataset.next_sample_random(with_raw=True)
 
@@ -211,8 +215,9 @@ with open(os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_taylor.t
 # f = open(cur_script_name() + "seq.txt", 'w')
 # f.writelines(["%s\n" % item for item in list(seq)])
 
-with open(cur_script_name() + "_seq.txt", 'w') as f:
-    #rawseq = seq[0][1].replace("_", "")
+
+with open(os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_seq.txt", 'w') as f:
+    # rawseq = seq[0][1].replace("_", "")
     rawseq = seq[0][1]
     f.write("%s\n" % rawseq)
     for item in list(rawseq):
@@ -221,6 +226,42 @@ with open(cur_script_name() + "_seq.txt", 'w') as f:
 print(seq)
 # print(labels)
 print(nhmaps3)
+
+
+def plot_score(seq, scores):
+    scores = scores[0:len(seq)]
+    plt.figure(figsize=(30, numpy.amax((scores)) + 0.05))
+    plt.xlim(0)
+    plt.ylim(0, numpy.amax((scores)))
+    # fig1.set(figsize=(20, 2))
+    plt.axhline(0, color='black')
+    plt.tick_params(axis='x', rotation=90, labelsize=5)
+    # fig1.set_xticklabels(fontsize=8)
+
+    plt.bar(list(range(len(seq))), (scores), color='rgb', tick_label=list(range(1, len(seq) + 1)), align='center')
+    for a, b in zip(list(range(len(seq))), (scores)):
+        if b > 0:
+            plt.text(a, b + 0.05, seq[a], ha='center', va='bottom', fontsize=6)
+
+    plt.tight_layout()
+    plt.savefig(os.getcwd() + "/result/" + cur_script_name() + "_" + name + "_" +"raw.png")
+    plt.close()
+
+
+plot_score(rawseq, nhmaps3)
+
+# print(rawseq[nhmaps3.argsort()[-30:][::-1]])
+seq_list = list(rawseq)
+bigger_list = nhmaps3.argsort()[-30:][::-1]
+
+for i, item in enumerate(bigger_list):
+    if (i + 1) % 10 == 0:
+        print("%s:" % seq_list[item], end="")
+        print("%s," % str(item + 1), end="")
+        print("\n")
+    else:
+        print("%s:" % seq_list[item], end="")
+        print("%s," % str(item + 1), end="")
 
 print(nhmaps3.argsort()[-30:][::-1])
 print(nhmaps3[nhmaps3.argsort()[-30:][::-1]])
