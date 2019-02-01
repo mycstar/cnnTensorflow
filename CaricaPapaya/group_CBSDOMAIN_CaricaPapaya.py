@@ -27,7 +27,7 @@ from datetime import datetime
 
 from batchDataset import Dataset
 
-from models_2_4_caricapapaya import MNIST_CNN, Taylor
+from models_2_4_caricapapaya_1 import MNIST_CNN, Taylor
 
 from imblearn.over_sampling import RandomOverSampler
 from imblearn.combine import SMOTEENN
@@ -38,14 +38,14 @@ from collections import Counter
 
 total_start_time = datetime.now()
 
-batch_size = 50
+batch_size = 10
 num_classes = 2
 num_features = 21000
 seq_len = 1000
 num_features_per = 21
 collection_name = "sensitivity_analysis"
 split_size = 5
-epochs = 5
+epochs = 30
 
 CHARSET = {'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, \
            'I': 7, 'K': 8, 'L': 9, 'M': 10, 'N': 11, 'P': 12, 'Q': 13, \
@@ -79,10 +79,11 @@ def encoding_seq_np(seq):
     return arr
 
 
-def get_Data():
+def get_Data(dataFile):
     X = []
     Y = []
-    dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/caricapapaya_label_0_1000.txt"
+    #dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/caricapapaya_label_0_1000.txt"
+    #dataFile = '/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/train_8000.txt'
     print("data File:", dataFile)
 
     for index, line in enumerate(open(dataFile, 'r').readlines()):
@@ -153,8 +154,8 @@ def get_Data_group():
     return X, Y, Z
 
 
-def get_Data_group1():
-    dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/CA_group_features_CA_25800.fa.csv"
+def get_Data_group1(dataFile):
+    #dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/CA_group_features_CA_25800.fa.csv"
     print("data File:", dataFile)
 
     groupData = pandas.read_csv(dataFile, sep=",", header=0)
@@ -284,13 +285,13 @@ def plot_draw(cvscores, tprs, fprs, aucs):
     print("current script:", script_name)
     script_name = script_name[0:-3]  # remove ".py"
     script_num = script_name.split('_')[2]
-    plt.savefig('./result/' +script_name + ".png")
+    plt.savefig('./result/' + script_name + ".png")
 
 
 def cur_script_name():
     argv0_list = sys.argv[0].split("/")
     script_name = argv0_list[len(argv0_list) - 1]  # get script file name self
-    #print("current script:", script_name)
+    # print("current script:", script_name)
     script_name = script_name[0:-3]  # remove ".py"
 
     return script_name
@@ -327,7 +328,7 @@ def plot_draw_cross_validation(cvscores, tprso, fprs, aucs):
     plt.legend(loc="lower right")
     # plt.show()
     script_name = cur_script_name()
-    plt.savefig('./result/' +script_name + ".png")
+    plt.savefig('./result/' + script_name + ".png")
 
 
 def plot_precision_recall_vs_threshold(precisions, recalls, thresholds, fold):
@@ -366,10 +367,11 @@ def groupFilter(df, num):
     group_series = df.groupby(['family'])['label'].sum()
     ret_family_list = group_series[group_series >= num].keys().tolist()
     print("%s group memebers number are greater than %s" % (len(ret_family_list), num))
+    print("group detail:", group_series[group_series >= num])
 
     ret_df = df.loc[df['family'].isin(ret_family_list)]
     ret_df = ret_df.groupby(['family']).head(num)
-    print("%s samples per group, total samples is:%s" % (num, len(ret_df)))
+    print("select %s samples per group, total samples is:%s" % (num, len(ret_df)))
 
     return ret_df
 
@@ -389,18 +391,7 @@ def cross_validate(X_0, Y_0, groupData, epochs, class_num, feature_num, collecti
     current_time = time.time()
     time_tag = str(int(current_time))
 
-    #    for fold, train_0, test_0, fold_1, train_1, test_1 in zip(enumerate(kfold.split(X_0, Y_0)),
-    #                                                              enumerate(kfold.split(X_1, Y_1))):
-
-    # groups = pandas.Series(groupData["family"].tolist())   #.unique()
-    # print(groups.describe())
-    # group_series = groupData.groupby(['family'])['label'].sum()
-    # ret_family_list = group_series[group_series > 1].keys().tolist()
-    # ret_df = groupData.loc[groupData['family'].isin(ret_family_list)]
-    # for key, item in group_series.iteritems():
-    #     print(item)
-
-    groupData = groupFilter(groupData, 30)
+    groupData = groupFilter(groupData, 50)
 
     families = numpy.array(groupData["family"].tolist())
     names = numpy.array(groupData["mernum"].tolist())
@@ -411,6 +402,8 @@ def cross_validate(X_0, Y_0, groupData, epochs, class_num, feature_num, collecti
     for i in range(len(seqs)):
         encoding_seq_np_list(seqs[i], data[i])
 
+    print("total valid positive :%s  " % (len(seqs)))
+
     kf = GroupKFold(n_splits=split_size)
 
     for (fold, (train_0, test_0)), (train_1, test_1) in zip(enumerate(kfold.split(X_0, Y_0)),
@@ -418,7 +411,6 @@ def cross_validate(X_0, Y_0, groupData, epochs, class_num, feature_num, collecti
 
         print('\nfold:%s' % fold)
         start_time = datetime.now()
-
 
         x_train_0 = X_0[train_0]
         ky_train_0 = Y_0[train_0]
@@ -430,11 +422,13 @@ def cross_validate(X_0, Y_0, groupData, epochs, class_num, feature_num, collecti
         ky_train_1 = labels[train_1]
         z_train_1 = names[train_1]
         family_train_1 = families[train_1]
+        print("train family: ", pandas.Series(family_train_1).unique())
 
         x_test_1 = data[test_1]
         y_test_1 = labels[test_1]
         z_test_1 = names[test_1]
         family_test_1 = families[test_1]
+        # print("test family: ", family_test_1)
 
         checkpoint = []
 
@@ -459,7 +453,7 @@ def cross_validate(X_0, Y_0, groupData, epochs, class_num, feature_num, collecti
         y_train = numpy.append(ky_train_0, ky_train_1, axis=0)
 
         #ros = RandomOverSampler(random_state=6548)
-        #ros = SMOTEENN(ratio='auto', n_jobs=6)
+        #ros = SMOTEENN(ratio='minority', n_jobs=6)
 
         #x_train, y_train = ros.fit_sample(x_train, y_train)
 
@@ -510,6 +504,8 @@ def cross_validate(X_0, Y_0, groupData, epochs, class_num, feature_num, collecti
 
             cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y_placeholder),
                                   name="loss_reduce_mean")
+            # cost = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(logits=logits, labels=y_placeholder),
+            #                       name="loss_reduce_mean")
 
             optimizer = tf.train.AdamOptimizer().minimize(cost, var_list=DNN.vars, name="adam_train_op")
 
@@ -561,6 +557,8 @@ def cross_validate(X_0, Y_0, groupData, epochs, class_num, feature_num, collecti
 
             # print('Accuracy:', session.run(train_accuracy, feed_dict={x_placeholder: x_test, y_placeholder: y_test}))
             # test
+
+            print("test family: ", pandas.Series(family_test_1).unique())
             test_accuracy_score, predict_score = run_test(sess, train_accuracy, prediction, x_placeholder,
                                                           y_placeholder, x_test, y_test, cvscores, tprs, fprs, aucs,
                                                           fold)
@@ -578,11 +576,13 @@ def cross_validate(X_0, Y_0, groupData, epochs, class_num, feature_num, collecti
 
 hmaps = []
 
-groupData = get_Data_group1()
+negative_dataFile = '/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/caricapapaya_label_0_1000.txt'
+positive_dataFile = "/home/myc/projectpy/cnnTensorflowNew/data/CaricaPapaya/CA_group_features_CA_25800.fa.csv"
+groupData = get_Data_group1(positive_dataFile)
 
-X_0, Y_0 = get_Data()
+X_0, Y_0 = get_Data(negative_dataFile)
 
-#X_1, Y_1, Z_1 = get_Data_group()
+# X_1, Y_1, Z_1 = get_Data_group()
 
 results, checkpoints = cross_validate(X_0, Y_0, groupData, epochs, num_classes, num_features,
                                       collection_name, split_size)
