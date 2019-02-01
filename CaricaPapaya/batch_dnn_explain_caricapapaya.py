@@ -10,16 +10,18 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from datetime import datetime
+from batchDataset1 import Dataset
 
 from deepexplain.tensorflow import DeepExplain
 from featureData import get_data
-from models_2_4_caricapapaya import MNIST_CNN, Taylor
+from models_2_4_caricapapaya_1 import MNIST_CNN, Taylor
 
 total_start_time = datetime.now()
 
 num_features = 21000
 seq_length = 1000
 num_label = 2
+batch_size = 20
 
 ## ######################## ##
 #
@@ -105,6 +107,18 @@ def parse_data_batch(datas, with_raw=False):
 img_x, img_y = 1, num_features
 
 
+def dict_extend(dict1, dict2):
+    for key in dict1:
+        values = dict1[key]
+        if key in dict2:
+            values2 = dict2[key]
+            new_values = np.vstack([values, values2])
+            dict1[key] = new_values
+    for key in dict2:
+        if key not in dict1:
+            dict1[key] = dict2[key]
+
+
 def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
     with tf.Session() as sess:
         with DeepExplain(session=sess, graph=sess.graph) as de:
@@ -115,42 +129,61 @@ def run_deep_explain(logdir, ckptdir, sample_imgs, label_imgs):
 
             weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CNN')
             opera = tf.get_collection('DTD_T')
+            #prediction = opera[0]
             logits = opera[1]
             activations = tf.get_collection('DTD')
+            #activations.append(prediction)
+
             x_placeholder_new = activations[0]
+
+            weights.pop(4)
+            weights.pop(5)
 
             model_summary()
 
+            train_data = Dataset(sample_imgs, label_imgs)
+
             with DeepExplain(session=sess) as de:
-                attributions = {
-                    # Gradient-based
-                    # NOTE: reduce_max is used to select the output unit for the class predicted by the classifier
-                    # For an example of how to use the ground-truth labels instead, see mnist_cnn_keras notebook
-                    'Saliency maps': de.explain('saliency', logits, x_placeholder_new, sample_imgs),
-                    'Gradient Input': de.explain('grad*input', logits, x_placeholder_new, sample_imgs),
-                    'Integrated Gradients': de.explain('intgrad', logits, x_placeholder_new, sample_imgs),
-                    'Epsilon-LRP': de.explain('elrp', logits, x_placeholder_new, sample_imgs),
-                    'DeepLIFT (Rescale)': de.explain('deeplift', logits, x_placeholder_new, sample_imgs),
-                    # Perturbation-based (comment out to evaluate, but this will take a while!)
-                    # 'Occlusion [15x15]':    de.explain('occlusion', tf.reduce_max(logits, 1), X, xs, window_shape=(15,15,3), step=4)
-                }
-                print("DeepExplain Done!")
 
-            conv_ksize = [1, 5, 5, 1]
-            pool_ksize = [1, 2, 2, 1]
-            conv_strides = [1, 1, 1, 1]
-            pool_strides = [1, 2, 2, 1]
+                total_batch = int(train_data._num_examples / batch_size)+1
 
-            weights.reverse()
-            activations.reverse()
+                conv_ksize = [1, 5, 5, 1]
+                pool_ksize = [1, 2, 2, 1]
+                conv_strides = [1, 1, 1, 1]
+                pool_strides = [1, 2, 2, 1]
+                #
+                weights.reverse()
+                activations.reverse()
+                #
+                taylor = Taylor(activations, weights, conv_ksize, pool_ksize, conv_strides, pool_strides, 'Taylor')
 
-            taylor = Taylor(activations, weights, conv_ksize, pool_ksize, conv_strides, pool_strides, 'Taylor')
-            label_taylor = taylor(np.argmax(label_imgs))
+                attributions_merge = {}
+                for i in range(total_batch):
+                    batch_x, batch_y = train_data.next_batch(batch_size, shuffle=False)
 
-            res = sess.run(label_taylor, feed_dict={x_placeholder_new: sample_imgs})
-            attributions['deep taylor'] = res
+                    attributions = {
+                        # Gradient-based
+                        # NOTE: reduce_max is used to select the output unit for the class predicted by the classifier
+                        # For an example of how to use the ground-truth labels instead, see mnist_cnn_keras notebook
+                        'Saliency maps': de.explain('saliency', logits, x_placeholder_new, batch_x)
+                        # 'Gradient Input': de.explain('grad*input', logits, x_placeholder_new, batch_x),
+                        # 'Integrated Gradients': de.explain('intgrad', logits, x_placeholder_new, batch_x),
+                        # 'Epsilon-LRP': de.explain('elrp', logits, x_placeholder_new, batch_x),
+                        # 'DeepLIFT (Rescale)': de.explain('deeplift', logits, x_placeholder_new, batch_x),
+                        # Perturbation-based (comment out to evaluate, but this will take a while!)
+                        # 'Occlusion [15x15]':    de.explain('occlusion', tf.reduce_max(logits, 1), X, xs, window_shape=(15,15,3), step=4)
+                    }
+                    print("DeepExplain Done!")
 
-    return attributions
+                    label_taylor = taylor(np.argmax(batch_y))
+                    res = sess.run(label_taylor, feed_dict={x_placeholder_new: batch_x})
+
+                    print("DeepExplain: running taylor  explanation  method")
+                    attributions['deep taylor'] = res
+                    #
+                    dict_extend(attributions_merge, attributions)
+
+    return attributions_merge
 
 
 def run_deep_taylor_decomposition(logdir, ckptdir, sample_imgs, label_imgs):
@@ -201,9 +234,13 @@ def batch_sample(batch1):
 
 
 hmaps = []
-
-ckptdir = "./log/log_1543854085_fold_4/"
-logdir = "./log/log_1543854085_fold_4/"
+#/home/myc/projectpy/cnnTensorflowNew/CaricaPapaya/log/log_1544202458_fold_4
+# ckptdir = "./log/log_1547659566_fold_4"
+# logdir = "./log/log_1547659566_fold_4/"
+# ckptdir = "./log/log_1548222255_fold_4"
+# logdir = "./log/log_1548222255_fold_4"
+ckptdir = "./log/log_1548952248_fold_0"
+logdir = "./log/log_1548952248_fold_0"
 
 feature_datas = get_data()
 
@@ -212,7 +249,8 @@ for key in feature_datas.keys():
     feature_list.append((key, feature_datas.get(key)))
 
 num_data = len(feature_list)
-batch1 = feature_list[:80]
+#batch1 = feature_list[80:]
+batch1 = feature_list
 
 sample_datas1 = batch_sample(batch1)
 datas, labels, raws = parse_data_batch(sample_datas1, with_raw=True)
@@ -224,14 +262,18 @@ for key in hmaps_batch1:
     nhmaps_sums = nhmaps3.sum(axis=1)
     relevance_score_avg_list = []
     activate_avg_list = []
+    alignment_sites_avg_list = []
 
     for i, nhmaps_sum in enumerate(nhmaps_sums):
         sample_name, sample_feature = feature_list[i]
         sample_seq = sample_feature.getSeq()
         seq_length = len(sample_seq)
+
+        #whole seq average
         relevance_score_avg = float(nhmaps_sum) / float(seq_length)
         relevance_score_avg_list.append(relevance_score_avg)
 
+        # activate site average
         sample_nhmaps = nhmaps3[i]
         valid_sample_nhmaps = [item for item in nhmaps3[i] if item > 0]
         activateSites = sample_feature.getActivateSites()
@@ -241,8 +283,19 @@ for key in hmaps_batch1:
         activate_avg = np.mean(activate_scores)
         activate_avg_list.append(activate_avg)
 
+        # alignment start to end sites average
+        alignment_seq = sample_nhmaps[sample_feature.alignedstart-1:sample_feature.alignedend-1]
+        alignment_avg = np.mean(alignment_seq)
+        alignment_sites_avg_list.append(alignment_avg)
+
+    with open(os.getcwd() + "/result/" + cur_script_name() + "_" + key + "_" + "avg_score.txt", 'w') as f:
+        #        f.write("%s\n\n\n" % seqobj.location)
+        for i, item in enumerate(relevance_score_avg_list):
+            f.write("%s\t%f\t%f\t%f\n" % (feature_list[i][1].getName(), activate_avg_list[i], alignment_sites_avg_list[i], item))
+
     plt.plot(list(range(len(relevance_score_avg_list))), relevance_score_avg_list, color='red', label='avg relevance')
     plt.plot(list(range(len(activate_avg_list))), activate_avg_list, color='blue', label='avg activate')
+    plt.plot(list(range(len(alignment_sites_avg_list))), alignment_sites_avg_list, color='orange', label='(avg alignment')
     plt.tight_layout()
     plt.savefig(os.getcwd() + "/result/" + cur_script_name() + "_" + key + ".png")
     plt.close()
